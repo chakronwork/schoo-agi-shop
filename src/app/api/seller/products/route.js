@@ -1,13 +1,10 @@
-// src/app/api/seller/products/route.js
-
 import { NextResponse } from 'next/server'
-// เราจะใช้ createServerClient โดยตรงที่นี่ แต่ต้องปรับวิธีเรียกใช้
 import { createServerClient } from '@supabase/ssr'
 
+// Maximum price allowed by database (numeric(10,2) = 10^8 - 0.01)
+const MAX_PRICE = 99999999.99
+
 export async function POST(request) {
-  // สร้าง Supabase client ที่ออกแบบมาสำหรับ API Routes/Middleware
-  // โดยส่ง request เข้าไปจัดการเรื่อง cookie โดยตรง
-  // นี่คือวิธีที่ถูกต้องสำหรับ API Routes
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -27,33 +24,26 @@ export async function POST(request) {
   )
 
   try {
-    // 1. Check for authenticated user
+    // Step 1: Authenticate the user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       console.error('API Auth Error:', authError)
       return NextResponse.json({ message: 'Unauthorized: No active session.' }, { status: 401 })
     }
 
-    // 2. Check if the user is a seller and get their store_id
+    // Step 2: Authorize the user
     const { data: store, error: storeError } = await supabase
       .from('stores')
       .select('id, status')
       .eq('user_id', user.id)
-      .single() // .single() expects exactly one row, will error if 0 or more than 1 are found.
+      .single()
     
-    // Detailed error logging for debugging
     if (storeError) {
-        console.error('Error fetching store for user:', user.id, storeError)
-        // If the error is "PGRST116", it means no rows were found.
         if (storeError.code === 'PGRST116') {
             return NextResponse.json({ message: 'Forbidden: You are not a registered seller.' }, { status: 403 })
         }
-        throw storeError // Throw other unexpected database errors
-    }
-
-    if (!store) {
-      // This case might be redundant due to .single() but it's a good safeguard.
-      return NextResponse.json({ message: 'Forbidden: Seller profile not found.' }, { status: 403 })
+        console.error('Error fetching store for user:', user.id, storeError)
+        throw storeError
     }
 
     if (store.status !== 'approved') {
@@ -62,47 +52,78 @@ export async function POST(request) {
 
     const storeId = store.id
 
-    // 3. Parse FormData
+    // Step 3: Process and Validate Input Data
     const formData = await request.formData()
-    const name = formData.get('name')
-    const description = formData.get('description')
-    const price = formData.get('price')
+    const name = formData.get('name')?.toString().trim()
+    const description = formData.get('description')?.toString().trim()
+    const priceString = formData.get('price')
     const category_id = formData.get('category_id')
     const imageFile = formData.get('image')
 
-    // 4. Validation
-    if (!name || !description || !price || !imageFile || !category_id) {
-      return NextResponse.json({ message: 'Bad Request: Missing required fields (name, description, price, image, category_id).' }, { status: 400 })
-    }
-    if (imageFile.size === 0) {
-        return NextResponse.json({ message: 'Bad Request: Image file cannot be empty.' }, { status: 400 })
+    // Basic validation
+    if (!name || !description || !priceString || !category_id || !imageFile || imageFile.size === 0) {
+      return NextResponse.json({ message: 'Bad Request: Missing or empty required fields (name, description, price, category_id, image).' }, { status: 400 })
     }
 
-    // 5. Upload image to Supabase Storage
-    // Use a structured path like: /public/{store_id}/{file_name}
-    // บรรทัดใหม่ที่แก้ไขแล้ว
-      const fileExtension = imageFile.name.split('.').pop();
-      const fileName = `${storeId}/${Date.now()}.${fileExtension}`;    const { data: uploadData, error: uploadError } = await supabase.storage
+    // Parse and validate price
+    const price = parseFloat(priceString)
+    if (isNaN(price)) {
+      return NextResponse.json({ message: 'Bad Request: Price must be a valid number.' }, { status: 400 })
+    }
+    if (price < 0) {
+      return NextResponse.json({ message: 'Bad Request: Price cannot be negative.' }, { status: 400 })
+    }
+    if (price > MAX_PRICE) {
+      return NextResponse.json({ message: `Bad Request: Price cannot exceed ${MAX_PRICE.toLocaleString()}.` }, { status: 400 })
+    }
+    // Check for reasonable decimal places (2 decimal places max)
+    if (!/^\d+(\.\d{1,2})?$/.test(priceString)) {
+      return NextResponse.json({ message: 'Bad Request: Price can have at most 2 decimal places.' }, { status: 400 })
+    }
+
+    // Parse and validate category_id
+    const categoryId = parseInt(category_id, 10)
+    if (isNaN(categoryId)) {
+      return NextResponse.json({ message: 'Bad Request: category_id must be a valid number.' }, { status: 400 })
+    }
+
+    // Validate category exists (FIXED: Use proper query)
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('id', categoryId)
+      .single()
+
+    if (categoryError || !categoryData) {
+      console.error('Category validation error:', categoryError)
+      return NextResponse.json({ message: 'Bad Request: Invalid category_id. The selected category does not exist.' }, { status: 400 })
+    }
+
+    // Step 4: Upload image
+    const fileExtension = imageFile.name.split('.').pop()
+    const sanitizedFileName = `${storeId}/${Date.now()}.${fileExtension}`
+    
+    const { error: uploadError } = await supabase.storage
       .from('product-images')
-      .upload(fileName, imageFile)
+      .upload(sanitizedFileName, imageFile)
 
     if (uploadError) {
       console.error('Storage Upload Error:', uploadError)
       throw new Error('Internal Server Error: Failed to upload image.')
     }
 
-    // 6. Get the public URL of the uploaded image
+    // Step 5: Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('product-images')
-      .getPublicUrl(fileName)
+      .getPublicUrl(sanitizedFileName)
 
-    // 7. Insert product data and image metadata in a transaction
-    const { data: newProduct, error: rpcError } = await supabase.rpc('create_product_and_image', {
+    // Step 6: Create product using RPC
+    const { error: rpcError } = await supabase.rpc('create_product_and_image', {
         p_name: name,
         p_description: description,
-        p_price: parseFloat(price),
+        p_price: price,
         p_store_id: storeId,
-        p_category_id: parseInt(category_id, 10),
+        p_category_id: categoryId,
         p_image_url: publicUrl,
         p_file_size: imageFile.size,
         p_file_type: imageFile.type
@@ -110,15 +131,25 @@ export async function POST(request) {
 
     if (rpcError) {
         console.error('RPC create_product_and_image Error:', rpcError);
-        // If the transaction fails, we should try to clean up the uploaded file.
-        await supabase.storage.from('product-images').remove([fileName])
-        throw new Error('Internal Server Error: Failed to save product data.');
+        // Clean up orphaned file
+        await supabase.storage.from('product-images').remove([sanitizedFileName])
+        
+        // Provide more specific error messages
+        if (rpcError.code === '22003') {
+          return NextResponse.json({ message: 'Bad Request: Price value is too large for the database.' }, { status: 400 })
+        }
+        if (rpcError.code === '23503') {
+          return NextResponse.json({ message: 'Bad Request: Invalid reference data (category or store).' }, { status: 400 })
+        }
+        
+        throw new Error('Internal Server Error: Failed to save product data. The database operation failed.');
     }
 
-    return NextResponse.json({ message: 'Product created successfully', product: newProduct }, { status: 201 })
+    // Step 7: Success
+    return NextResponse.json({ message: 'Product created successfully' }, { status: 201 })
 
   } catch (error) {
-    console.error('Unhandled Create Product Error:', error)
+    console.error('Unhandled Create Product Error:', error.message)
     return NextResponse.json({ message: error.message || 'An unexpected error occurred.' }, { status: 500 })
   }
 }
