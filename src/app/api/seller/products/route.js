@@ -1,13 +1,13 @@
 // src/app/api/seller/products/route.js
+
 import { NextResponse } from 'next/server'
 // เราจะใช้ createServerClient โดยตรงที่นี่ แต่ต้องปรับวิธีเรียกใช้
 import { createServerClient } from '@supabase/ssr'
 
 export async function POST(request) {
-  const response = NextResponse.next()
-  
   // สร้าง Supabase client ที่ออกแบบมาสำหรับ API Routes/Middleware
   // โดยส่ง request เข้าไปจัดการเรื่อง cookie โดยตรง
+  // นี่คือวิธีที่ถูกต้องสำหรับ API Routes
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -17,28 +17,21 @@ export async function POST(request) {
           return request.cookies.get(name)?.value
         },
         set(name, value, options) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          request.cookies.set({ name, value, ...options })
         },
         remove(name, options) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          request.cookies.set({ name, value: '', ...options })
         },
       },
     }
   )
 
   try {
-    // 1. Check for authenticated user (โค้ดส่วนนี้เหมือนเดิม แต่ client ฉลาดขึ้นแล้ว)
+    // 1. Check for authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      console.error('API Auth Error:', authError)
+      return NextResponse.json({ message: 'Unauthorized: No active session.' }, { status: 401 })
     }
 
     // 2. Check if the user is a seller and get their store_id
@@ -46,13 +39,25 @@ export async function POST(request) {
       .from('stores')
       .select('id, status')
       .eq('user_id', user.id)
-      .single()
+      .single() // .single() expects exactly one row, will error if 0 or more than 1 are found.
     
-    if (storeError || !store) {
-      return NextResponse.json({ message: 'You are not a registered seller.' }, { status: 403 })
+    // Detailed error logging for debugging
+    if (storeError) {
+        console.error('Error fetching store for user:', user.id, storeError)
+        // If the error is "PGRST116", it means no rows were found.
+        if (storeError.code === 'PGRST116') {
+            return NextResponse.json({ message: 'Forbidden: You are not a registered seller.' }, { status: 403 })
+        }
+        throw storeError // Throw other unexpected database errors
     }
+
+    if (!store) {
+      // This case might be redundant due to .single() but it's a good safeguard.
+      return NextResponse.json({ message: 'Forbidden: Seller profile not found.' }, { status: 403 })
+    }
+
     if (store.status !== 'approved') {
-      return NextResponse.json({ message: `Your seller application is currently ${store.status}.` }, { status: 403 })
+      return NextResponse.json({ message: `Forbidden: Your seller application status is '${store.status}'. It must be 'approved'.` }, { status: 403 })
     }
 
     const storeId = store.id
@@ -62,69 +67,58 @@ export async function POST(request) {
     const name = formData.get('name')
     const description = formData.get('description')
     const price = formData.get('price')
-    // เราจะเพิ่ม category_id เข้ามาด้วย เพราะมันจำเป็น
-    const category_id = formData.get('category_id') // สมมติว่าส่งมาจาก Frontend
+    const category_id = formData.get('category_id')
     const imageFile = formData.get('image')
 
     // 4. Validation
     if (!name || !description || !price || !imageFile || !category_id) {
-      return NextResponse.json({ message: 'Missing required fields (name, description, price, image, category_id).' }, { status: 400 })
+      return NextResponse.json({ message: 'Bad Request: Missing required fields (name, description, price, image, category_id).' }, { status: 400 })
     }
-    
+    if (imageFile.size === 0) {
+        return NextResponse.json({ message: 'Bad Request: Image file cannot be empty.' }, { status: 400 })
+    }
+
     // 5. Upload image to Supabase Storage
-    const fileName = `${user.id}/${Date.now()}-${imageFile.name}`
-    const { error: uploadError } = await supabase.storage
+    // Use a structured path like: /public/{store_id}/{file_name}
+    // บรรทัดใหม่ที่แก้ไขแล้ว
+      const fileExtension = imageFile.name.split('.').pop();
+      const fileName = `${storeId}/${Date.now()}.${fileExtension}`;    const { data: uploadData, error: uploadError } = await supabase.storage
       .from('product-images')
       .upload(fileName, imageFile)
 
     if (uploadError) {
       console.error('Storage Upload Error:', uploadError)
-      throw new Error('Failed to upload image.')
+      throw new Error('Internal Server Error: Failed to upload image.')
     }
 
-    // 6. Get public URL
+    // 6. Get the public URL of the uploaded image
     const { data: { publicUrl } } = supabase.storage
       .from('product-images')
       .getPublicUrl(fileName)
 
-    // 7. Insert product data
-    const { data: newProduct, error: productInsertError } = await supabase
-      .from('products')
-      .insert({
-        name,
-        description,
-        price: parseFloat(price),
-        store_id: storeId,
-        category_id: parseInt(category_id, 10), // แปลงเป็น integer
-      })
-      .select()
-      .single()
+    // 7. Insert product data and image metadata in a transaction
+    const { data: newProduct, error: rpcError } = await supabase.rpc('create_product_and_image', {
+        p_name: name,
+        p_description: description,
+        p_price: parseFloat(price),
+        p_store_id: storeId,
+        p_category_id: parseInt(category_id, 10),
+        p_image_url: publicUrl,
+        p_file_size: imageFile.size,
+        p_file_type: imageFile.type
+    })
 
-    if (productInsertError) {
-      console.error('Product Insert Error:', productInsertError)
-      await supabase.storage.from('product-images').remove([fileName])
-      throw new Error('Failed to save product data.')
-    }
-    
-    // 8. Insert image metadata
-    const { error: imageInsertError } = await supabase
-      .from('product_images')
-      .insert({
-        product_id: newProduct.id,
-        image_url: publicUrl,
-        file_size: imageFile.size,
-        file_type: imageFile.type,
-      })
-        
-    if (imageInsertError) {
-      console.error('Image Meta Insert Error:', imageInsertError)
-      throw new Error('Failed to save product image metadata.')
+    if (rpcError) {
+        console.error('RPC create_product_and_image Error:', rpcError);
+        // If the transaction fails, we should try to clean up the uploaded file.
+        await supabase.storage.from('product-images').remove([fileName])
+        throw new Error('Internal Server Error: Failed to save product data.');
     }
 
-    return NextResponse.json({ message: 'Product created successfully', product: newProduct })
+    return NextResponse.json({ message: 'Product created successfully', product: newProduct }, { status: 201 })
 
   } catch (error) {
-    console.error('Create Product Error:', error)
+    console.error('Unhandled Create Product Error:', error)
     return NextResponse.json({ message: error.message || 'An unexpected error occurred.' }, { status: 500 })
   }
 }
