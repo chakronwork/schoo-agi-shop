@@ -336,6 +336,7 @@ $$ LANGUAGE plpgsql;
 ### Phase 2: Buyer Features (🚧 กำลังทำ)
 - [ ] Shopping Cart
 - [ ] Order Placement (Simulation)
+- [ ] Product datali
 - [ ] Product Reviews & Ratings
 - [ ] Search & Filter Products
 - [ ] User Profile Management
