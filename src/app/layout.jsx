@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext' // 1. Import AuthProvider
 import Navbar from '@/components/common/Navbar' 
+import { CartProvider } from '@/context/CartContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,8 +18,10 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider> {/* 2. Wrap the children with AuthProvider */}
+          <CartProvider>
           <Navbar /> {/* 3. Include the Navbar */}
           <main>{children}</main> {/* Wrap children in a main tag */}
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>
