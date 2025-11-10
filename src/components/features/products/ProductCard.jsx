@@ -16,7 +16,7 @@ export default function ProductCard({ product }) {
   const storeName = product.stores?.store_name || 'N/A'
 
   return (
-    <Link href={`/product/${product.id}`} className="block group">
+     <Link href={`/product/${product.id}`} className="block group">
       <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300">
         <div className="relative w-full h-48 bg-gray-200">
           <Image
