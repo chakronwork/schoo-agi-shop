@@ -86,13 +86,13 @@ export default function OrderHistoryPage() {
             products (
               id,
               name,
-              product_images ( image_url )
-            ),
-            stores (
-              store_name
+              product_images ( image_url ),
+              stores (
+                store_name
+              )
             )
           )
-        `)
+        `) // ✅ แก้ไข: ย้าย stores เข้าไปอยู่ใน products เรียบร้อยแล้ว
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -280,7 +280,7 @@ export default function OrderHistoryPage() {
                             Qty: {item.quantity} × {formatPrice(item.price_at_purchase)}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {item.stores?.store_name}
+                            {item.products?.stores?.store_name || 'Unknown Store'} {/* ✅ แก้ไขการเรียกชื่อร้านให้ถูกต้อง */}
                           </p>
                         </div>
                       </div>

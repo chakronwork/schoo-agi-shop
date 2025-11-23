@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  /* สีพื้นหลัง */
+  --background: #F7FDF9; /* ขาวอมเขียวนิดๆ ให้ดูสบายตา */
   --foreground: #171717;
+
+  /* ธีมสีเกษตร (Agri-Theme) */
+  --agri-primary: #2E7D32;    /* เขียวเข้ม ดูน่าเชื่อถือ (ปุ่มหลัก, Navbar) */
+  --agri-hover: #1B5E20;      /* เขียวเข้มกว่า (ตอนเอาเมาส์ชี้) */
+  --agri-pastel: #E8F5E9;     /* เขียวพาสเทลอ่อนๆ (พื้นหลังส่วนย่อย) */
+  --agri-accent: #81C784;     /* เขียวกลาง (ไอคอน, เส้นขอบ) */
+  --agri-warning: #FF9800;    /* สีส้ม (สำหรับดาว, แจ้งเตือน) */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  
+  /* เพิ่มสีของเราเข้าไปใน Tailwind */
+  --color-agri-primary: var(--agri-primary);
+  --color-agri-hover: var(--agri-hover);
+  --color-agri-pastel: var(--agri-pastel);
+  --color-agri-accent: var(--agri-accent);
+  --color-agri-warning: var(--agri-warning);
+  
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* จัดแต่ง Scrollbar ให้ดูดีขึ้น (optional) */
+::-webkit-scrollbar {
+  width: 8px;
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+::-webkit-scrollbar-track {
+  background: var(--agri-pastel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--agri-accent);
+  border-radius: 4px;
 }

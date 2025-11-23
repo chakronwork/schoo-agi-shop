@@ -2,88 +2,195 @@
 
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
-import { useCart } from '@/context/CartContext' // 1. Import useCart
+import { useCart } from '@/context/CartContext'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-
-// ไอคอนตะกร้าสินค้า (SVG)
-const CartIcon = () => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    fill="none" 
-    viewBox="0 0 24 24" 
-    strokeWidth={1.5} 
-    stroke="currentColor" 
-    className="w-6 h-6"
-  >
-    <path 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" 
-    />
-  </svg>
-)
+import { ShoppingCart, Menu, X, Search, User, LogOut, Sprout } from 'lucide-react'
+import Swal from 'sweetalert2'
 
 export default function Navbar() {
-  const { user, loading: authLoading } = useAuth() // เปลี่ยนชื่อ loading เป็น authLoading
-  const { itemCount, loading: cartLoading } = useCart() // 2. Get itemCount และ loading
+  const { user, loading: authLoading } = useAuth()
+  const { itemCount, loading: cartLoading } = useCart()
   const supabase = createClient()
   const router = useRouter()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  
+  // ✅ เพิ่ม State สำหรับเก็บชื่อที่จะแสดง
+  const [displayName, setDisplayName] = useState('บัญชีของฉัน')
+
+  // ✅ เพิ่ม useEffect เพื่อดึงชื่อจาก Database
+  useEffect(() => {
+    const fetchProfileName = async () => {
+      if (user) {
+        // 1. ลองตั้งชื่อจากข้อมูลเบื้องต้นก่อน (Google/Email) กันช่องว่าง
+        let initialName = user.user_metadata?.full_name || user.email?.split('@')[0]
+        
+        // 2. ไปดึงชื่อล่าสุดจากตาราง user_profiles (เผื่อเขาแก้ชื่อในหน้า Profile)
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('full_name')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (data?.full_name) {
+          setDisplayName(data.full_name)
+        } else if (initialName) {
+          setDisplayName(initialName)
+        }
+      }
+    }
+
+    fetchProfileName()
+  }, [user]) // รันใหม่เมื่อ user เปลี่ยน (Login/Logout)
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    const result = await Swal.fire({
+      title: 'ออกจากระบบ?',
+      text: "คุณต้องการออกจากระบบใช่หรือไม่",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#2E7D32',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'ใช่, ออกเลย!',
+      cancelButtonText: 'ยกเลิก'
+    })
+
+    if (result.isConfirmed) {
+      await supabase.auth.signOut()
+      router.push('/login')
+      router.refresh()
+      // Reset ชื่อเมื่อ Logout
+      setDisplayName('บัญชีของฉัน')
+    }
   }
 
   return (
-    <nav className="bg-white shadow-md">
-      <div className="container mx-auto px-6 py-3 flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold text-gray-800">
-          Agri-Tech
-        </Link>
-        <div className="flex items-center space-x-4">
-          {authLoading ? ( // 3. ใช้ authLoading
-            <div className="h-8 w-24 bg-gray-200 rounded animate-pulse"></div>
-          ) : user ? (
-            <>
-              {/* 4. เพิ่ม Link ตะกร้าสินค้า */}
-              <Link 
-                href="/cart" 
-                className="relative text-gray-700 hover:text-indigo-600"
-              >
-                <CartIcon />
-                {!cartLoading && itemCount > 0 && (
-                  <span className="absolute -top-2 -right-3 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
-                    {itemCount}
-                  </span>
-                )}
-              </Link>
+    <nav className="bg-agri-primary text-white shadow-lg sticky top-0 z-50">
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          
+          {/* Hamburger Menu */}
+          <button 
+            className="md:hidden p-2 hover:bg-agri-hover rounded-md transition-colors"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
 
-              <span className="text-gray-700 hidden sm:block">{user.email}</span>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-              >
-                Logout
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 text-xl font-bold tracking-wide hover:opacity-90 transition-opacity">
+            <div className="bg-white text-agri-primary p-1.5 rounded-full">
+              <Sprout size={20} strokeWidth={2.5} />
+            </div>
+            <span className="hidden sm:block">Agri-Tech</span>
+          </Link>
+
+          {/* Search Bar */}
+          <div className="hidden md:flex flex-1 max-w-2xl mx-4">
+            <div className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
+              <div className="flex items-center px-3 bg-gray-100 border-r text-gray-500 text-sm whitespace-nowrap">
+                สินค้าทั้งหมด
+              </div>
+              <input 
+                type="text" 
+                placeholder="ค้นหาอุปกรณ์การเกษตร..." 
+                className="flex-1 px-4 py-2 text-gray-700 focus:outline-none"
+              />
+              <button className="bg-agri-warning hover:bg-orange-600 text-white px-5 transition-colors">
+                <Search size={20} />
               </button>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="text-gray-700 hover:text-indigo-600">
-                Login
-              </Link>
-              <Link href="/register"
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
-              >
-                Register
-              </Link>
-            </>
-          )}
+            </div>
+          </div>
+
+          {/* Right Actions */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {authLoading ? (
+              <div className="h-8 w-24 bg-white/20 rounded animate-pulse"></div>
+            ) : user ? (
+              <>
+                {/* ✅ จุดที่แก้: Profile Link แสดงชื่อลูกค้า */}
+                <Link href="/profile" className="hidden md:flex flex-col items-start leading-tight hover:bg-agri-hover px-3 py-1.5 rounded-lg transition-colors">
+                  <span className="text-[10px] text-gray-200 font-light">สวัสดี,</span>
+                  <span className="text-sm font-bold flex items-center gap-1 max-w-[150px] truncate">
+                    {displayName} <User size={14} />
+                  </span>
+                </Link>
+
+                {/* Cart */}
+                <Link href="/cart" className="relative p-2 hover:bg-agri-hover rounded-md transition-colors flex items-center">
+                  <div className="relative">
+                    <ShoppingCart size={26} />
+                    {!cartLoading && itemCount > 0 && (
+                      <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-agri-warning text-xs font-bold text-white border-2 border-agri-primary">
+                        {itemCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="hidden md:block font-bold text-sm ml-1 mt-3">ตะกร้า</span>
+                </Link>
+
+                {/* Logout */}
+                <button 
+                  onClick={handleLogout}
+                  className="hidden md:flex items-center gap-1 text-sm bg-red-600/90 hover:bg-red-700 px-3 py-1.5 rounded-md transition-colors ml-2"
+                >
+                  <LogOut size={16} /> ออก
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <Link href="/login" className="hover:underline">เข้าสู่ระบบ</Link>
+                <span className="h-4 w-px bg-white/40"></span>
+                <Link href="/register" className="font-bold hover:underline">สมัครสมาชิก</Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile Search */}
+        <div className="mt-3 md:hidden">
+          <div className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
+            <input 
+              type="text" 
+              placeholder="ค้นหา..." 
+              className="flex-1 px-4 py-2 text-gray-700 focus:outline-none"
+            />
+            <button className="bg-agri-warning text-white px-4">
+              <Search size={20} />
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      {isMenuOpen && (
+        <div className="md:hidden bg-agri-hover text-white border-t border-white/10 animate-fade-in">
+          <div className="container mx-auto py-2">
+            {/* Mobile Profile Header */}
+            {user && (
+              <div className="px-4 py-3 border-b border-white/10 mb-2">
+                <p className="text-xs text-gray-300">ยินดีต้อนรับ</p>
+                <p className="font-bold text-lg">{displayName}</p>
+              </div>
+            )}
+            
+            <Link href="/" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">หน้าแรก</Link>
+            <Link href="/storefront" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">สินค้าทั้งหมด</Link>
+            {user && (
+              <>
+                <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">ข้อมูลส่วนตัว</Link>
+                <Link href="/profile/orders" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">ประวัติคำสั่งซื้อ</Link>
+                <button onClick={() => { setIsMenuOpen(false); handleLogout(); }} className="w-full text-left px-4 py-3 hover:bg-red-600/50 text-red-200 mt-2 border-t border-white/10">
+                  ออกจากระบบ
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   )
 }

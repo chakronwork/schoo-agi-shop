@@ -1,46 +1,47 @@
-// src/context/AuthContext.jsx
-
 'use client'
 
 import { createContext, useState, useEffect, useContext } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// 1. Create the Context
 const AuthContext = createContext()
 
-// 2. Create the Provider Component
 export function AuthProvider({ children }) {
-  const supabase = createClient()
+  // ✅ แก้ไข: ใส่ใน useState เพื่อให้สร้างแค่ครั้งเดียว ไม่สร้างใหม่ทุกครั้งที่ render
+  const [supabase] = useState(() => createClient())
+  
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // This function runs once when the component mounts.
     const checkUserSession = async () => {
-      // Try to get the current session from Supabase
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user ?? null)
-      setLoading(false)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        setUser(session?.user ?? null)
+      } catch (error) {
+        console.error('Session check error:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
     checkUserSession()
 
-    // This is the magic! Supabase auth listener.
-    // It runs whenever the user logs in, logs out, or the session changes.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null)
+        // เช็คก่อน set เพื่อลดการ render ซ้ำ
+        setUser(current => {
+            if (current?.id === session?.user?.id) return current
+            return session?.user ?? null
+        })
         setLoading(false)
       }
     )
 
-    // Cleanup function: Unsubscribe from the listener when the component unmounts.
     return () => {
       subscription?.unsubscribe()
     }
-  }, [supabase]) // The effect depends on the supabase client instance.
+  }, [supabase])
 
-  // 3. Define the value to be passed to consuming components
   const value = {
     user,
     loading,
@@ -49,7 +50,6 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-// 4. Create a custom hook for easy consumption
 export const useAuth = () => {
   const context = useContext(AuthContext)
   if (context === undefined) {

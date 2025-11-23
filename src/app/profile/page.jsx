@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { User, MapPin, Phone, Mail, Edit2, Save, X, Shield, Package, Map, Camera, KeyRound } from 'lucide-react'
+import Swal from 'sweetalert2'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -22,12 +24,9 @@ export default function ProfilePage() {
     postal_code: '',
   })
 
-  // States
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-  const [success, setSuccess] = useState(null)
 
   // Password change states
   const [showPasswordChange, setShowPasswordChange] = useState(false)
@@ -42,21 +41,19 @@ export default function ProfilePage() {
       router.push('/login')
       return
     }
-    if (user) {
-      fetchProfile()
-    }
+    if (user) fetchProfile()
   }, [user, authLoading])
 
   const fetchProfile = async () => {
     try {
-      // Fetch user profile
+      // ✅ ใช้ maybeSingle() เพื่อแก้ปัญหา Error 406 กรณี User ใหม่ยังไม่มี Profile
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') throw error
+      if (error) throw error
 
       if (profile) {
         setProfileData({
@@ -68,15 +65,10 @@ export default function ProfilePage() {
           postal_code: profile.postal_code || '',
         })
       } else {
-        // If no profile exists, just use email from auth
-        setProfileData(prev => ({
-          ...prev,
-          email: user.email || ''
-        }))
+        setProfileData(prev => ({ ...prev, email: user.email || '' }))
       }
     } catch (err) {
       console.error('Error fetching profile:', err)
-      setError('Failed to load profile')
     } finally {
       setLoading(false)
     }
@@ -85,48 +77,39 @@ export default function ProfilePage() {
   const handleSaveProfile = async (e) => {
     e.preventDefault()
     setSaving(true)
-    setError(null)
-    setSuccess(null)
 
     try {
-      // Check if profile exists
-      const { data: existingProfile } = await supabase
+      // Update or Insert (Upsert)
+      const { error } = await supabase
         .from('user_profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
+        .upsert({
+          user_id: user.id,
+          full_name: profileData.full_name,
+          phone_number: profileData.phone_number,
+          address: profileData.address,
+          city: profileData.city,
+          postal_code: profileData.postal_code,
+          updated_at: new Date().toISOString()
+        })
 
-      const profileUpdate = {
-        user_id: user.id,
-        full_name: profileData.full_name,
-        phone_number: profileData.phone_number,
-        address: profileData.address,
-        city: profileData.city,
-        postal_code: profileData.postal_code,
-        updated_at: new Date().toISOString()
-      }
+      if (error) throw error
 
-      let result
-      if (existingProfile) {
-        // Update existing profile
-        result = await supabase
-          .from('user_profiles')
-          .update(profileUpdate)
-          .eq('user_id', user.id)
-      } else {
-        // Create new profile
-        result = await supabase
-          .from('user_profiles')
-          .insert(profileUpdate)
-      }
-
-      if (result.error) throw result.error
-
-      setSuccess('Profile updated successfully!')
+      Swal.fire({
+        icon: 'success',
+        title: 'บันทึกสำเร็จ',
+        text: 'ข้อมูลส่วนตัวของคุณถูกอัปเดตแล้ว',
+        timer: 1500,
+        showConfirmButton: false,
+        confirmButtonColor: '#2E7D32'
+      })
       setIsEditing(false)
     } catch (err) {
-      console.error('Error saving profile:', err)
-      setError('Failed to save profile')
+      Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: err.message,
+        confirmButtonColor: '#2E7D32'
+      })
     } finally {
       setSaving(false)
     }
@@ -136,202 +119,152 @@ export default function ProfilePage() {
     e.preventDefault()
     
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('New passwords do not match')
-      return
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      setError('Password must be at least 6 characters')
+      Swal.fire({ icon: 'error', title: 'รหัสผ่านไม่ตรงกัน', text: 'กรุณากรอกรหัสผ่านใหม่ให้ตรงกันทั้งสองช่อง' })
       return
     }
 
     setSaving(true)
-    setError(null)
-
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwordData.newPassword
-      })
-
+      const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword })
       if (error) throw error
 
-      setSuccess('Password changed successfully!')
+      Swal.fire({ icon: 'success', title: 'เปลี่ยนรหัสผ่านสำเร็จ', timer: 1500, showConfirmButton: false })
       setShowPasswordChange(false)
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      })
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
     } catch (err) {
-      console.error('Error changing password:', err)
-      setError(err.message || 'Failed to change password')
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message })
     } finally {
       setSaving(false)
     }
   }
 
   if (authLoading || loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-10">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-600 border-r-transparent"></div>
-          <p className="mt-2 text-gray-600">Loading profile...</p>
-        </div>
-      </div>
-    )
+    return <div className="flex justify-center items-center min-h-[60vh] text-agri-primary animate-pulse">Loading Profile...</div>
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-8">My Profile</h1>
-
-      {/* Navigation Tabs */}
-      <div className="border-b mb-6">
-        <nav className="flex space-x-8">
-          <button className="pb-4 px-1 border-b-2 border-indigo-600 text-indigo-600 font-medium">
-            Profile Information
-          </button>
-          <Link
-            href="/profile/orders"
-            className="pb-4 px-1 border-b-2 border-transparent text-gray-600 hover:text-gray-800"
-          >
-            Order History
-          </Link>
-          <Link
-            href="/profile/addresses"
-            className="pb-4 px-1 border-b-2 border-transparent text-gray-600 hover:text-gray-800"
-          >
-            Address Book
-          </Link>
-        </nav>
+    <div className="container mx-auto px-4 py-12 max-w-5xl">
+      
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <div className="w-16 h-16 bg-agri-pastel rounded-full flex items-center justify-center text-agri-primary border-2 border-agri-primary">
+          <User size={32} />
+        </div>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">บัญชีของฉัน</h1>
+          <p className="text-gray-500">จัดการข้อมูลส่วนตัวและการสั่งซื้อ</p>
+        </div>
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-600">{error}</p>
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
-          <p className="text-green-600">{success}</p>
-        </div>
-      )}
+      {/* Navigation Tabs (Custom Style) */}
+      <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-gray-200 mb-8 w-fit">
+        <button className="px-6 py-2.5 rounded-lg text-sm font-bold bg-agri-pastel text-agri-primary flex items-center gap-2 shadow-sm">
+          <User size={18} /> ข้อมูลส่วนตัว
+        </button>
+        <Link href="/profile/orders" className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-agri-primary flex items-center gap-2 transition-all">
+          <Package size={18} /> ประวัติคำสั่งซื้อ
+        </Link>
+        <Link href="/profile/addresses" className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-agri-primary flex items-center gap-2 transition-all">
+          <Map size={18} /> สมุดที่อยู่
+        </Link>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Profile Form */}
-        <div className="lg:col-span-2">
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left: Main Form */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white border border-agri-pastel rounded-2xl p-8 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-agri-primary"></div>
+            
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Personal Information</h2>
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <span className="bg-green-100 p-1.5 rounded-md text-agri-primary"><Edit2 size={18} /></span> 
+                แก้ไขข้อมูล
+              </h2>
               {!isEditing && (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 text-indigo-600 hover:text-indigo-700 font-medium"
-                >
-                  Edit
+                <button onClick={() => setIsEditing(true)} className="text-sm text-agri-primary font-bold hover:underline flex items-center gap-1">
+                  แก้ไข
                 </button>
               )}
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSaveProfile} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1"><User size={14}/> ชื่อ-นามสกุล</label>
                   <input
                     type="text"
                     value={profileData.full_name}
                     onChange={(e) => setProfileData(prev => ({ ...prev, full_name: e.target.value }))}
                     disabled={!isEditing}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50 disabled:text-gray-500 transition-all"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1"><Mail size={14}/> อีเมล</label>
                   <input
                     type="email"
                     value={profileData.email}
                     disabled
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                    className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1"><Phone size={14}/> เบอร์โทรศัพท์</label>
                   <input
                     type="tel"
                     value={profileData.phone_number}
                     onChange={(e) => setProfileData(prev => ({ ...prev, phone_number: e.target.value }))}
                     disabled={!isEditing}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50 disabled:text-gray-500 transition-all"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1"><MapPin size={14}/> จังหวัด</label>
                   <input
                     type="text"
                     value={profileData.city}
                     onChange={(e) => setProfileData(prev => ({ ...prev, city: e.target.value }))}
                     disabled={!isEditing}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50 disabled:text-gray-500 transition-all"
                   />
                 </div>
-
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">ที่อยู่</label>
                   <textarea
                     value={profileData.address}
                     onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
                     disabled={!isEditing}
                     rows="2"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50 disabled:text-gray-500 transition-all resize-none"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Postal Code
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">รหัสไปรษณีย์</label>
                   <input
                     type="text"
                     value={profileData.postal_code}
                     onChange={(e) => setProfileData(prev => ({ ...prev, postal_code: e.target.value }))}
                     disabled={!isEditing}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50 disabled:text-gray-500 transition-all"
                   />
                 </div>
               </div>
 
               {isEditing && (
-                <div className="flex justify-end space-x-3 pt-4">
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsEditing(false)
-                      fetchProfile() // Reset to original data
-                    }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    onClick={() => { setIsEditing(false); fetchProfile(); }}
+                    className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium flex items-center gap-2 transition-colors"
                   >
-                    Cancel
+                    <X size={18} /> ยกเลิก
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400"
+                    className="px-5 py-2.5 text-white bg-agri-primary hover:bg-agri-hover rounded-xl font-medium flex items-center gap-2 shadow-lg shadow-agri-primary/30 transition-all disabled:opacity-70"
                   >
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {saving ? 'กำลังบันทึก...' : <><Save size={18} /> บันทึกข้อมูล</>}
                   </button>
                 </div>
               )}
@@ -339,95 +272,89 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Sidebar */}
+        {/* Right: Sidebar Stats & Security */}
         <div className="space-y-6">
-          {/* Account Security */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Account Security</h3>
-            <div className="space-y-3">
-              <button
-                onClick={() => setShowPasswordChange(!showPasswordChange)}
-                className="w-full text-left px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Change Password
-              </button>
-              <div className="text-sm text-gray-600">
-                <p>Last login: {new Date().toLocaleDateString()}</p>
-                <p>Account created: {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
-              </div>
+          {/* Security Card */}
+          <div className="bg-white border border-agri-pastel rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Shield size={20} className="text-agri-warning" /> ความปลอดภัย
+            </h3>
+            <button
+              onClick={() => setShowPasswordChange(!showPasswordChange)}
+              className="w-full py-3 px-4 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 hover:text-agri-primary hover:border-agri-primary transition-all flex justify-between items-center group"
+            >
+              <span className="flex items-center gap-2"><KeyRound size={18}/> เปลี่ยนรหัสผ่าน</span>
+              <span className="text-gray-400 group-hover:text-agri-primary">→</span>
+            </button>
+            
+            <div className="mt-6 pt-6 border-t border-gray-100 text-xs text-gray-500 space-y-2">
+              <p>เข้าใช้งานล่าสุด: <span className="font-medium text-gray-700">{new Date().toLocaleDateString('th-TH')}</span></p>
+              <p>สร้างบัญชีเมื่อ: <span className="font-medium text-gray-700">{user?.created_at ? new Date(user.created_at).toLocaleDateString('th-TH') : 'N/A'}</span></p>
             </div>
           </div>
 
           {/* Quick Stats */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Quick Stats</h3>
-            <div className="space-y-2 text-sm">
-              <Link href="/profile/orders" className="flex justify-between hover:text-indigo-600">
-                <span>Total Orders</span>
-                <span className="font-medium">View →</span>
+          <div className="bg-gradient-to-br from-agri-primary to-green-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10"></div>
+            <h3 className="font-bold text-lg mb-4 relative z-10">ภาพรวมบัญชี</h3>
+            <div className="space-y-3 relative z-10">
+              <Link href="/profile/orders" className="flex justify-between items-center p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all cursor-pointer backdrop-blur-sm">
+                <span className="flex items-center gap-2"><Package size={16}/> คำสั่งซื้อทั้งหมด</span>
+                <span>→</span>
               </Link>
-              <Link href="/cart" className="flex justify-between hover:text-indigo-600">
-                <span>Items in Cart</span>
-                <span className="font-medium">View →</span>
+              <Link href="/cart" className="flex justify-between items-center p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all cursor-pointer backdrop-blur-sm">
+                <span className="flex items-center gap-2"><Package size={16}/> สินค้าในตะกร้า</span>
+                <span>→</span>
               </Link>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Password Change Modal */}
+      {/* Modal เปลี่ยนรหัสผ่าน */}
       {showPasswordChange && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Change Password</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl scale-100 animate-scale-in">
+            <h3 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+              <KeyRound className="text-agri-primary" /> เปลี่ยนรหัสผ่าน
+            </h3>
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านใหม่</label>
                 <input
                   type="password"
                   value={passwordData.newPassword}
                   onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                  required
-                  minLength="6"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required minLength="6"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50"
+                  placeholder="อย่างน้อย 6 ตัวอักษร"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm New Password
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ยืนยันรหัสผ่านใหม่</label>
                 <input
                   type="password"
                   value={passwordData.confirmPassword}
                   onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                  required
-                  minLength="6"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required minLength="6"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-agri-accent/50"
+                  placeholder="กรอกอีกครั้ง"
                 />
               </div>
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowPasswordChange(false)
-                    setPasswordData({
-                      currentPassword: '',
-                      newPassword: '',
-                      confirmPassword: ''
-                    })
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                  onClick={() => setShowPasswordChange(false)}
+                  className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50"
                 >
-                  Cancel
+                  ยกเลิก
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400"
+                  className="px-5 py-2.5 bg-agri-primary text-white rounded-xl hover:bg-agri-hover shadow-lg shadow-agri-primary/20"
                 >
-                  {saving ? 'Changing...' : 'Change Password'}
+                  {saving ? 'กำลังเปลี่ยน...' : 'ยืนยันการเปลี่ยน'}
                 </button>
               </div>
             </form>
