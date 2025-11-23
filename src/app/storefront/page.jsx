@@ -1,23 +1,24 @@
 // src/app/storefront/page.jsx
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react' // ✅ เพิ่ม Suspense
 import { createClient } from '@/lib/supabase/client'
 import ProductCard from '@/components/features/products/ProductCard'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { Search, Filter, X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react' // เพิ่มไอคอน
+import { Search, Filter, X, ChevronLeft, ChevronRight, SlidersHorizontal, Loader2 } from 'lucide-react'
 
-export default function StorefrontPage() {
+// 1️⃣ แยก Component หลักออกมาตั้งชื่อใหม่ (เช่น StorefrontContent)
+function StorefrontContent() {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const searchParams = useSearchParams() // ✅ ใช้ได้แล้วเพราะมี Suspense ห่ออยู่ข้างนอก
   
   // States
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showMobileFilters, setShowMobileFilters] = useState(false) // สำหรับมือถือ
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
@@ -31,10 +32,6 @@ export default function StorefrontPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const productsPerPage = 12
-
-  // ... (Functions updateURL, fetchCategories, fetchProducts เหมือนเดิม) ...
-  // เพื่อความกระชับ ผมขอละส่วน Logic การดึงข้อมูลไว้ (เพราะใช้ Logic เดิมได้เลย)
-  // แต่ถ้าต้องการโค้ดส่วน Logic เต็มๆ บอกได้นะครับ
 
   const updateURL = useCallback((updates = {}) => {
     const current = new URLSearchParams(searchParams.toString())
@@ -104,14 +101,12 @@ export default function StorefrontPage() {
     fetchProducts()
   }, [searchQuery, selectedCategory, priceRange, sortBy])
 
-  // Pagination Logic
   const paginatedProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * productsPerPage
     return products.slice(startIndex, startIndex + productsPerPage)
   }, [products, currentPage])
   const totalPages = Math.ceil(products.length / productsPerPage)
 
-  // Handlers
   const handleSearch = (e) => {
     e.preventDefault()
     setCurrentPage(1)
@@ -159,7 +154,7 @@ export default function StorefrontPage() {
 
       <div className="flex flex-col lg:flex-row gap-8">
         
-        {/* 🟢 Sidebar Filters (ปรับแก้ CSS ตรงนี้) */}
+        {/* Sidebar Filters */}
         <aside className={`lg:w-1/4 ${showMobileFilters ? 'block' : 'hidden lg:block'}`}>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-24">
             
@@ -206,7 +201,7 @@ export default function StorefrontPage() {
               </select>
             </div>
 
-            {/* ✅ Price Range (แก้ตรงนี้: ใช้ Grid หรือ Flex ที่ยืดหยุ่นกว่า) */}
+            {/* Price Range */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">ช่วงราคา (บาท)</label>
               <div className="grid grid-cols-2 gap-2 items-center">
@@ -216,7 +211,7 @@ export default function StorefrontPage() {
                     placeholder="ต่ำสุด"
                     value={priceRange.min}
                     onChange={(e) => setPriceRange(prev => ({ ...prev, min: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-agri-accent/50 text-sm min-w-0" // เพิ่ม min-w-0
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-agri-accent/50 text-sm min-w-0"
                     min="0"
                   />
                 </div>
@@ -226,7 +221,7 @@ export default function StorefrontPage() {
                     placeholder="สูงสุด"
                     value={priceRange.max}
                     onChange={(e) => setPriceRange(prev => ({ ...prev, max: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-agri-accent/50 text-sm min-w-0" // เพิ่ม min-w-0
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-agri-accent/50 text-sm min-w-0"
                     min="0"
                   />
                 </div>
@@ -309,7 +304,7 @@ export default function StorefrontPage() {
             </div>
           )}
 
-          {/* Pagination (Theme ใหม่) */}
+          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center space-x-2 mt-12">
               <button
@@ -354,5 +349,21 @@ export default function StorefrontPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// 2️⃣ ตัวหุ้มหลัก (Wrapper) ใส่ Suspense ตรงนี้
+export default function StorefrontPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-20 text-center">
+        <div className="inline-block p-4 bg-white rounded-full shadow-md mb-4">
+          <Loader2 className="h-8 w-8 text-agri-primary animate-spin" />
+        </div>
+        <p className="text-gray-500">กำลังโหลดรายการสินค้า...</p>
+      </div>
+    }>
+      <StorefrontContent />
+    </Suspense>
   )
 }
