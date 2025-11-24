@@ -85,7 +85,7 @@ export default function Navbar() {
             <div className="bg-white text-agri-primary p-1.5 rounded-full">
               <Sprout size={20} strokeWidth={2.5} />
             </div>
-            <span className="hidden sm:block">Agri-Tech</span>
+            <span className="hidden sm:block">AI-Shop Electronics</span>
           </Link>
 
           {/* Search Bar */}

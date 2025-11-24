@@ -9,7 +9,7 @@ import { CartProvider } from '@/context/CartContext'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Agri-Tech Marketplace',
+  title: 'AI-Shop Electronics',
   description: 'A platform for buying and selling agricultural tech.',
 }
 
