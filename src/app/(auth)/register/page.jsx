@@ -69,7 +69,7 @@ export default function RegisterPage() {
         
         {/* Header */}
         <div className="bg-agri-primary p-8 text-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full bg-[url('/pattern.svg')] opacity-10"></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/20 to-transparent"></div>
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white text-agri-primary rounded-full mb-4 shadow-lg">
             <Sprout size={32} />
           </div>

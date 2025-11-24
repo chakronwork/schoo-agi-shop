@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import Image from 'next/image'
 import Link from 'next/link'
 
+// Helper function สำหรับจัดรูปแบบเงิน
 const formatPrice = (price) => {
   return new Intl.NumberFormat('th-TH', {
     style: 'currency',
@@ -16,6 +17,7 @@ const formatPrice = (price) => {
   }).format(price)
 }
 
+// Helper function สำหรับจัดรูปแบบวันที่
 const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString('th-TH', {
     year: 'numeric',
@@ -24,7 +26,7 @@ const formatDate = (dateString) => {
   })
 }
 
-// 📌 ฟังก์ชันแปลงคะแนนเป็นคำพูดตามรูปภาพที่ส่งมา
+// ฟังก์ชันแปลงคะแนนเป็นคำพูด
 const getRatingLabel = (rating) => {
   const r = Math.round(rating)
   switch (r) {
@@ -67,7 +69,7 @@ export default function ProductDetailPage() {
           description,
           price,
           stock_quantity,
-          product_location, 
+          product_location,
           status,
           created_at,
           stores ( 
@@ -96,10 +98,14 @@ export default function ProductDetailPage() {
         .eq('id', productId)
         .single()
 
-      if (error) throw error
+      if (error) {
+        if (error.code === 'PGRST116') throw new Error('Product not found')
+        throw error
+      }
+
       setProduct(data)
     } catch (err) {
-      console.error('Error fetching product:', err.message)
+      console.error('Error fetching product:', err.message || err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -111,6 +117,7 @@ export default function ProductDetailPage() {
       router.push('/login')
       return
     }
+
     setAddingToCart(true)
     try {
       await addItem(product.id, quantity)
@@ -142,7 +149,7 @@ export default function ProductDetailPage() {
     ))
   }
 
-  if (loading) return <div className="text-center py-20">Loading...</div>
+  if (loading) return <div className="text-center py-20 text-agri-primary animate-pulse">Loading...</div>
   if (error || !product) return <div className="text-center py-20 text-red-600">{error || 'Product not found'}</div>
 
   const images = product.product_images || []
@@ -159,14 +166,17 @@ export default function ProductDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         {/* 🖼️ Image Section */}
         <div className="space-y-4">
+          {/* Main Image */}
           <div className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden border">
             {images.length > 0 ? (
               <Image
                 src={images[selectedImage]?.image_url}
                 alt={product.name}
                 fill
-                className="object-cover"
                 priority
+                // ✅ ใส่ unoptimized
+                unoptimized
+                className="object-contain p-2"
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">No Image</div>
@@ -183,19 +193,26 @@ export default function ProductDetailPage() {
                     selectedImage === index ? 'border-indigo-600' : 'border-transparent'
                   }`}
                 >
-                  <Image src={img.image_url} alt="Thumbnail" fill className="object-cover" />
+                  <Image 
+                    src={img.image_url} 
+                    alt="Thumbnail" 
+                    fill 
+                    // ✅ ใส่ unoptimized
+                    unoptimized
+                    className="object-cover" 
+                  />
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* 📝 Product Info Section (ตามรูปที่ 2) */}
+        {/* 📝 Product Info Section */}
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
             
-            {/* ชื่อผู้ลงขาย (Store Name) */}
+            {/* ชื่อผู้ลงขาย */}
             <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
               <span>โดย:</span>
               <Link href={`/store/${product.stores?.id}`} className="font-medium text-indigo-600 hover:underline">
@@ -203,35 +220,45 @@ export default function ProductDetailPage() {
               </Link>
             </div>
 
+            {/* Rating */}
+            {reviewCount > 0 && (
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex text-yellow-400">{renderStars(averageRating)}</div>
+                <span className="text-sm text-gray-600">
+                  {averageRating} ({reviewCount} รีวิว)
+                </span>
+              </div>
+            )}
+
             {/* ราคา */}
             <div className="text-4xl font-bold text-indigo-600 mb-4">
               {formatPrice(product.price)}
             </div>
 
-            {/* ที่อยู่ของสินค้า (เพิ่มใหม่) */}
-            <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-3 rounded-lg">
+            {/* ที่อยู่ของสินค้า */}
+            <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">
               <svg className="w-5 h-5 mt-0.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <div>
-                <span className="font-semibold block text-gray-900">ที่อยู่ของสินค้า:</span>
-                <span>{product.product_location || 'ไม่ระบุพิกัด'}</span>
+                <span className="font-semibold block text-gray-900 text-sm">ที่อยู่ของสินค้า:</span>
+                <span className="text-sm">{product.product_location || 'ไม่ระบุพิกัด'}</span>
               </div>
             </div>
           </div>
 
           <div className="border-t pt-6">
             <h3 className="font-semibold text-gray-900 mb-2">รายละเอียดสินค้า</h3>
-            <p className="text-gray-600 whitespace-pre-line">{product.description}</p>
+            <p className="text-gray-600 whitespace-pre-line text-sm leading-relaxed">{product.description}</p>
           </div>
 
           {/* Action Buttons */}
           <div className="border-t pt-6 flex items-center gap-4">
-            <div className="flex items-center border border-gray-300 rounded-md">
-              <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="px-4 py-2 hover:bg-gray-100">-</button>
-              <span className="px-4 py-2 font-medium border-x border-gray-300">{quantity}</span>
-              <button onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))} className="px-4 py-2 hover:bg-gray-100">+</button>
+            <div className="flex items-center border border-gray-300 rounded-lg">
+              <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="px-4 py-2 hover:bg-gray-100 text-gray-600">-</button>
+              <span className="px-4 py-2 font-medium border-x border-gray-300 min-w-[3rem] text-center">{quantity}</span>
+              <button onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))} className="px-4 py-2 hover:bg-gray-100 text-gray-600">+</button>
             </div>
             <button
               onClick={handleAddToCart}
@@ -244,8 +271,8 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* ⭐ Reviews Section (ตามรูปที่ 1) */}
-      <div className="bg-gray-50 rounded-2xl p-8">
+      {/* ⭐ Reviews Section */}
+      <div className="bg-gray-50 rounded-2xl p-8 border border-gray-100">
         <div className="flex items-center gap-4 mb-8">
           <h2 className="text-2xl font-bold text-gray-900">รีวิวจากผู้ซื้อ</h2>
           {reviewCount > 0 && (
@@ -273,9 +300,8 @@ export default function ProductDetailPage() {
                       <p className="text-xs text-gray-400">{formatDate(review.created_at)}</p>
                     </div>
                   </div>
-                  {/* ✅ แสดงคำพูดตามคะแนนดาว (ตามรูปที่ 1) */}
                   <div className="text-right">
-                    <div className="flex text-yellow-400 mb-1">{renderStars(review.rating)}</div>
+                    <div className="flex text-yellow-400 mb-1 justify-end">{renderStars(review.rating)}</div>
                     <span className="text-xs font-medium px-2 py-1 bg-gray-100 rounded text-gray-600">
                       {getRatingLabel(review.rating)}
                     </span>

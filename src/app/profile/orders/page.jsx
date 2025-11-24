@@ -261,7 +261,7 @@ export default function OrderHistoryPage() {
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {order.order_items.slice(0, 3).map((item) => {
-                    const imageUrl = item.products?.product_images?.[0]?.image_url || '/placeholder.svg'
+                    const imageUrl = product.product_images?.[0]?.image_url || 'https://placehold.co/400x400/e2e8f0/1e293b?text=No+Image'
                     return (
                       <div key={item.id} className="flex items-center space-x-3">
                         <div className="relative w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">

@@ -1,6 +1,7 @@
+// src/components/features/products/ProductCard.jsx
 import Image from 'next/image'
 import Link from 'next/link'
-import { ShoppingBag, Star } from 'lucide-react' // ไอคอนใหม่
+import { ShoppingBag, Star } from 'lucide-react'
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('th-TH', {
@@ -10,11 +11,10 @@ const formatPrice = (price) => {
 }
 
 export default function ProductCard({ product }) {
-  const imageUrl = product.product_images?.[0]?.image_url || '/placeholder.svg'
+  const imageUrl = product.product_images?.[0]?.image_url || 'https://placehold.co/400x400/e2e8f0/1e293b?text=No+Image'
   const storeName = product.stores?.store_name || 'N/A'
   
-  // จำลองคะแนน (ถ้ามีจริงให้ดึงจาก prop)
-  const rating = product.avgRating || 4.5
+  const rating = product.avgRating || 0
 
   return (
      <Link href={`/product/${product.id}`} className="block group h-full">
@@ -26,12 +26,14 @@ export default function ProductCard({ product }) {
             src={imageUrl}
             alt={product.name}
             fill
+            // ✅ ใส่ unoptimized เพื่อแก้ปัญหา 400 Bad Request ทันที
+            unoptimized 
             className="object-contain p-4 group-hover:scale-105 transition-transform duration-300"
           />
-          {/* Badge (Example) */}
+          
           {product.stock_quantity < 5 && product.stock_quantity > 0 && (
-            <span className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-              เหลือ 5 ชิ้นสุดท้าย
+            <span className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+              เหลือ {product.stock_quantity} ชิ้น
             </span>
           )}
         </div>
