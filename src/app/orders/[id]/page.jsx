@@ -1,73 +1,29 @@
 // src/app/orders/[id]/page.jsx
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useState, useEffect, use } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import Link from 'next/link'
+import { CheckCircle, Clock, Truck, Package, ArrowLeft, Printer } from 'lucide-react'
 
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('th-TH', {
-    style: 'currency',
-    currency: 'THB',
-  }).format(price)
-}
+const formatPrice = (price) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(price)
+const formatDate = (dateString) => new Date(dateString).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-const getStatusColor = (status) => {
-  const colors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    shipped: 'bg-purple-100 text-purple-800',
-    delivered: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-  }
-  return colors[status] || 'bg-gray-100 text-gray-800'
-}
-
-const getStatusText = (status) => {
-  const texts = {
-    pending: 'รอการยืนยัน',
-    confirmed: 'ยืนยันแล้ว',
-    shipped: 'กำลังจัดส่ง',
-    delivered: 'จัดส่งสำเร็จ',
-    cancelled: 'ยกเลิก',
-  }
-  return texts[status] || status
-}
-
-export default function OrderDetailPage() {
-  const params = useParams()
+export default function OrderDetailPage({ params }) {
+  const { id: orderId } = use(params)
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const supabase = createClient()
 
-  const orderId = params.id
-
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
-      return
-    }
-
-    if (user && orderId) {
-      fetchOrder()
-    }
+    if (!authLoading && !user) router.push('/login')
+    if (user && orderId) fetchOrder()
   }, [user, authLoading, orderId])
 
   const fetchOrder = async () => {
@@ -75,192 +31,138 @@ export default function OrderDetailPage() {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id,
-          total_amount,
-          status,
-          shipping_address,
-          payment_method,
-          created_at,
+          id, total_amount, status, shipping_address, payment_method, created_at,
           order_items (
-            id,
-            quantity,
-            price_at_purchase,
-            products (
-              id,
-              name,
-              product_images ( image_url )
-            ),
-            stores (
-              id,
-              store_name
-            )
+            id, quantity, price_at_purchase,
+            products (id, name, product_images ( image_url )),
+            stores (store_name)
           )
         `)
         .eq('id', orderId)
         .eq('user_id', user.id)
         .single()
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          throw new Error('Order not found or access denied')
-        }
-        throw error
-      }
-
+      if (error) throw error
       setOrder(data)
     } catch (err) {
-      console.error('Error fetching order:', err)
-      setError(err.message)
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
-  if (authLoading || loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-10">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-600 border-r-transparent"></div>
-          <p className="mt-2 text-gray-600">Loading order details...</p>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <div className="flex justify-center items-center h-screen text-agri-primary animate-pulse">Loading Order...</div>
+  if (!order) return <div className="text-center py-20">ไม่พบคำสั่งซื้อ</div>
 
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Link
-            href="/storefront"
-            className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-          >
-            Back to Shop
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (!order) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <p className="text-center text-gray-600">Order not found</p>
-      </div>
-    )
-  }
+  // Timeline Logic
+  const steps = ['pending', 'confirmed', 'shipped', 'delivered']
+  const currentStepIdx = steps.indexOf(order.status === 'cancelled' ? 'pending' : order.status)
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      {/* Success Message */}
-      <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6 text-center">
-        <svg
-          className="mx-auto h-12 w-12 text-green-500 mb-2"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <h1 className="text-2xl font-bold text-green-800 mb-1">
-          Order Placed Successfully!
-        </h1>
-        <p className="text-green-700">
-          Thank you for your order. We've received your order and will process it shortly.
-        </p>
-      </div>
-
-      {/* Order Details */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">Order Details</h2>
-            <p className="text-sm text-gray-500 mt-1">Order ID: {order.id}</p>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-            {getStatusText(order.status)}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-gray-500">Order Date</p>
-            <p className="font-medium">{formatDate(order.created_at)}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Payment Method</p>
-            <p className="font-medium capitalize">{order.payment_method.replace('_', ' ')}</p>
-          </div>
-          <div className="md:col-span-2">
-            <p className="text-gray-500">Shipping Address</p>
-            <p className="font-medium">{order.shipping_address}</p>
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="container mx-auto max-w-3xl">
+        
+        {/* Success Header */}
+        <div className="bg-agri-primary text-white rounded-t-3xl p-8 text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[url('/pattern.svg')] opacity-10"></div>
+          <div className="relative z-10">
+            <div className="w-16 h-16 bg-white text-agri-primary rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-bounce-in">
+              <CheckCircle size={32} />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">ขอบคุณสำหรับการสั่งซื้อ!</h1>
+            <p className="text-green-100">หมายเลขคำสั่งซื้อ: #{order.id.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
-      </div>
 
-      {/* Order Items */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Order Items</h2>
-        <div className="space-y-4">
-          {order.order_items.map((item) => {
-            const imageUrl = item.products.product_images?.[0]?.image_url || '/placeholder.svg'
-            return (
-              <div key={item.id} className="flex gap-4 pb-4 border-b last:border-b-0">
-                <div className="relative w-20 h-20 flex-shrink-0 bg-gray-100 rounded-md overflow-hidden">
-                  <Image
-                    src={imageUrl}
-                    alt={item.products.name}
-                    fill
-                    className="object-cover"
-                  />
+        {/* Ticket Body */}
+        <div className="bg-white rounded-b-3xl shadow-xl border-x border-b border-gray-200 p-8 relative">
+          
+          {/* Timeline */}
+          {order.status !== 'cancelled' && (
+            <div className="flex justify-between items-center mb-10 relative px-4">
+              <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -z-10"></div>
+              <div className={`absolute top-1/2 left-0 h-1 bg-agri-primary -z-10 transition-all duration-1000`} style={{ width: `${(currentStepIdx / (steps.length - 1)) * 100}%` }}></div>
+              
+              {steps.map((step, idx) => (
+                <div key={step} className="flex flex-col items-center gap-2 bg-white px-2">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${idx <= currentStepIdx ? 'bg-agri-primary border-agri-primary text-white' : 'bg-white border-gray-200 text-gray-300'}`}>
+                    {idx === 0 && <Clock size={14} />}
+                    {idx === 1 && <CheckCircle size={14} />}
+                    {idx === 2 && <Truck size={14} />}
+                    {idx === 3 && <Package size={14} />}
+                  </div>
+                  <span className={`text-xs font-medium ${idx <= currentStepIdx ? 'text-agri-primary' : 'text-gray-400'}`}>
+                    {step === 'pending' && 'รอชำระ'}
+                    {step === 'confirmed' && 'ยืนยัน'}
+                    {step === 'shipped' && 'ขนส่ง'}
+                    {step === 'delivered' && 'สำเร็จ'}
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800">{item.products.name}</h3>
-                  <p className="text-sm text-gray-500">
-                    By {item.stores.store_name}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Quantity: {item.quantity} × {formatPrice(item.price_at_purchase)}
-                  </p>
+              ))}
+            </div>
+          )}
+
+          {/* Order Info */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 pb-8 border-b border-dashed border-gray-200">
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-bold mb-1">วันที่สั่งซื้อ</p>
+              <p className="text-gray-800 font-medium">{formatDate(order.created_at)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-bold mb-1">วิธีการชำระเงิน</p>
+              <p className="text-gray-800 font-medium capitalize">
+                {order.payment_method === 'qr_code' && 'Thai QR Payment'}
+                {order.payment_method === 'credit_card' && 'บัตรเครดิต/เดบิต'}
+                {order.payment_method === 'cod' && 'เก็บเงินปลายทาง'}
+              </p>
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-xs text-gray-400 uppercase font-bold mb-1">ที่อยู่จัดส่ง</p>
+              <p className="text-gray-800 font-medium">{order.shipping_address}</p>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="space-y-4 mb-8">
+            {order.order_items.map((item) => (
+              <div key={item.id} className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-50 rounded-lg overflow-hidden relative border border-gray-100">
+                    <Image 
+                      src={item.products?.product_images?.[0]?.image_url || '/placeholder.svg'} 
+                      alt="Product" 
+                      fill 
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{item.products?.name}</p>
+                    <p className="text-xs text-gray-500">x{item.quantity} | {item.stores?.store_name}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-gray-800">
-                    {formatPrice(item.quantity * item.price_at_purchase)}
-                  </p>
-                </div>
+                <p className="text-sm font-bold text-gray-800">{formatPrice(item.price_at_purchase * item.quantity)}</p>
               </div>
-            )
-          })}
-        </div>
-
-        <div className="mt-4 pt-4 border-t">
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total Amount</span>
-            <span className="text-indigo-600">{formatPrice(order.total_amount)}</span>
+            ))}
           </div>
-        </div>
-      </div>
 
-      {/* Actions */}
-      <div className="flex gap-4">
-        <Link
-          href="/storefront"
-          className="flex-1 py-3 text-center border border-gray-300 text-gray-700 font-semibold rounded-md hover:bg-gray-50 transition-colors"
-        >
-          Continue Shopping
-        </Link>
-        <Link
-          href="/profile/orders"
-          className="flex-1 py-3 text-center bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition-colors"
-        >
-          View My Orders
-        </Link>
+          {/* Total */}
+          <div className="bg-agri-pastel/30 p-4 rounded-xl flex justify-between items-center mb-8">
+            <span className="text-agri-primary font-bold">ยอดสุทธิ</span>
+            <span className="text-2xl font-extrabold text-agri-primary">{formatPrice(order.total_amount)}</span>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <Link href="/storefront" className="flex-1 py-3 border border-gray-200 rounded-xl text-center text-gray-600 font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+              <ArrowLeft size={18} /> กลับหน้าแรก
+            </Link>
+            <button onClick={() => window.print()} className="flex-1 py-3 bg-agri-primary text-white rounded-xl text-center font-bold hover:bg-agri-hover transition-colors flex items-center justify-center gap-2 shadow-lg shadow-agri-primary/30">
+              <Printer size={18} /> พิมพ์ใบเสร็จ
+            </button>
+          </div>
+
+        </div>
       </div>
     </div>
   )
