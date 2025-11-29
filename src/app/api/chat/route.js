@@ -23,7 +23,7 @@ export async function POST(req) {
     ).join('\n') || "ไม่พบข้อมูลสินค้า";
 
     const systemInstruction = `
-      คุณคือ "Agri-Bot" ผู้ช่วย AI ของร้าน Agri-Tech Marketplace
+      คุณคือ "Dopa-Bot" ผู้ช่วย AI ของร้าน Dopa-Tech Marketplace
       หน้าที่ของคุณคือ: แนะนำสินค้าการเกษตร และตอบคำถามลูกค้าด้วยภาษาที่เป็นกันเอง สุภาพ และช่วยเหลือ
       
       นี่คือรายการสินค้าที่มีจำหน่ายในร้านตอนนี้:

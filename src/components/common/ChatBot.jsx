@@ -6,7 +6,7 @@ import { MessageCircle, X, Send, Bot, Loader2 } from 'lucide-react'
 export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState([
-    { role: 'model', text: 'สวัสดีครับ! ผม Agri-Bot มีอะไรให้ช่วยเรื่องอุปกรณ์การเกษตรไหมครับ? 🌱' }
+    { role: 'model', text: 'สวัสดีครับ! ผม Dopa-Bot มีอะไรให้ช่วยเรื่องอุปกรณ์การเกษตรไหมครับ? 🌱' }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -83,7 +83,7 @@ export default function ChatBot() {
                 <Bot size={20} />
               </div>
               <div>
-                <h3 className="font-bold text-sm">Agri-Bot Assistant</h3>
+                <h3 className="font-bold text-sm">Dopa-Bot Assistant</h3>
                 <p className="text-[10px] text-green-100 opacity-90 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse"></span>
                   Online
