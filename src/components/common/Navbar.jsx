@@ -17,18 +17,15 @@ export default function Navbar() {
   const supabase = createClient()
   const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  
-  // ✅ เพิ่ม State สำหรับเก็บชื่อที่จะแสดง
   const [displayName, setDisplayName] = useState('บัญชีของฉัน')
+  
+  // ✅ เพิ่ม State สำหรับ Search
+  const [searchQuery, setSearchQuery] = useState('')
 
-  // ✅ เพิ่ม useEffect เพื่อดึงชื่อจาก Database
   useEffect(() => {
     const fetchProfileName = async () => {
       if (user) {
-        // 1. ลองตั้งชื่อจากข้อมูลเบื้องต้นก่อน (Google/Email) กันช่องว่าง
         let initialName = user.user_metadata?.full_name || user.email?.split('@')[0]
-        
-        // 2. ไปดึงชื่อล่าสุดจากตาราง user_profiles (เผื่อเขาแก้ชื่อในหน้า Profile)
         const { data } = await supabase
           .from('user_profiles')
           .select('full_name')
@@ -42,9 +39,8 @@ export default function Navbar() {
         }
       }
     }
-
     fetchProfileName()
-  }, [user]) // รันใหม่เมื่อ user เปลี่ยน (Login/Logout)
+  }, [user])
 
   const handleLogout = async () => {
     const result = await Swal.fire({
@@ -62,8 +58,15 @@ export default function Navbar() {
       await supabase.auth.signOut()
       router.push('/login')
       router.refresh()
-      // Reset ชื่อเมื่อ Logout
       setDisplayName('บัญชีของฉัน')
+    }
+  }
+
+  // ✅ ฟังก์ชันค้นหา
+  const handleSearch = (e) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      router.push(`/storefront?q=${encodeURIComponent(searchQuery)}`)
     }
   }
 
@@ -88,21 +91,23 @@ export default function Navbar() {
             <span className="hidden sm:block">AI-Shop Electronics</span>
           </Link>
 
-          {/* Search Bar */}
+          {/* Search Bar (Desktop) - ✅ แก้ไขให้ใช้งานได้ */}
           <div className="hidden md:flex flex-1 max-w-2xl mx-4">
-            <div className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
+            <form onSubmit={handleSearch} className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
               <div className="flex items-center px-3 bg-gray-100 border-r text-gray-500 text-sm whitespace-nowrap">
                 สินค้าทั้งหมด
               </div>
               <input 
                 type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาอุปกรณ์การเกษตร..." 
                 className="flex-1 px-4 py-2 text-gray-700 focus:outline-none"
               />
-              <button className="bg-agri-warning hover:bg-orange-600 text-white px-5 transition-colors">
+              <button type="submit" className="bg-agri-warning hover:bg-orange-600 text-white px-5 transition-colors">
                 <Search size={20} />
               </button>
-            </div>
+            </form>
           </div>
 
           {/* Right Actions */}
@@ -111,7 +116,6 @@ export default function Navbar() {
               <div className="h-8 w-24 bg-white/20 rounded animate-pulse"></div>
             ) : user ? (
               <>
-                {/* ✅ จุดที่แก้: Profile Link แสดงชื่อลูกค้า */}
                 <Link href="/profile" className="hidden md:flex flex-col items-start leading-tight hover:bg-agri-hover px-3 py-1.5 rounded-lg transition-colors">
                   <span className="text-[10px] text-gray-200 font-light">สวัสดี,</span>
                   <span className="text-sm font-bold flex items-center gap-1 max-w-[150px] truncate">
@@ -119,7 +123,6 @@ export default function Navbar() {
                   </span>
                 </Link>
 
-                {/* Cart */}
                 <Link href="/cart" className="relative p-2 hover:bg-agri-hover rounded-md transition-colors flex items-center">
                   <div className="relative">
                     <ShoppingCart size={26} />
@@ -132,7 +135,6 @@ export default function Navbar() {
                   <span className="hidden md:block font-bold text-sm ml-1 mt-3">ตะกร้า</span>
                 </Link>
 
-                {/* Logout */}
                 <button 
                   onClick={handleLogout}
                   className="hidden md:flex items-center gap-1 text-sm bg-red-600/90 hover:bg-red-700 px-3 py-1.5 rounded-md transition-colors ml-2"
@@ -150,33 +152,32 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile Search */}
+        {/* Mobile Search - ✅ แก้ไขให้ใช้งานได้ */}
         <div className="mt-3 md:hidden">
-          <div className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
+          <form onSubmit={handleSearch} className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
             <input 
               type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="ค้นหา..." 
               className="flex-1 px-4 py-2 text-gray-700 focus:outline-none"
             />
-            <button className="bg-agri-warning text-white px-4">
+            <button type="submit" className="bg-agri-warning text-white px-4">
               <Search size={20} />
             </button>
-          </div>
+          </form>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden bg-agri-hover text-white border-t border-white/10 animate-fade-in">
           <div className="container mx-auto py-2">
-            {/* Mobile Profile Header */}
             {user && (
               <div className="px-4 py-3 border-b border-white/10 mb-2">
                 <p className="text-xs text-gray-300">ยินดีต้อนรับ</p>
                 <p className="font-bold text-lg">{displayName}</p>
               </div>
             )}
-            
             <Link href="/" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">หน้าแรก</Link>
             <Link href="/storefront" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">สินค้าทั้งหมด</Link>
             {user && (
