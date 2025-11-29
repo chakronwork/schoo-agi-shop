@@ -5,6 +5,7 @@ import './globals.css'
 import { AuthProvider } from '@/context/AuthContext' // 1. Import AuthProvider
 import Navbar from '@/components/common/Navbar' 
 import { CartProvider } from '@/context/CartContext'
+import ChatBot from '@/components/common/ChatBot'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
           <CartProvider>
           <Navbar /> {/* 3. Include the Navbar */}
           <main>{children}</main> {/* Wrap children in a main tag */}
+          <ChatBot />
           </CartProvider>
         </AuthProvider>
       </body>
