@@ -1,5 +1,4 @@
 // src/components/common/Navbar.jsx
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -8,7 +7,10 @@ import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { ShoppingCart, Menu, X, Search, User, LogOut, Sprout } from 'lucide-react'
+import { 
+  ShoppingCart, Menu, X, Search, User, LogOut, Sprout, 
+  LayoutDashboard, Store 
+} from 'lucide-react'
 import Swal from 'sweetalert2'
 
 export default function Navbar() {
@@ -16,31 +18,38 @@ export default function Navbar() {
   const { itemCount, loading: cartLoading } = useCart()
   const supabase = createClient()
   const router = useRouter()
+  
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [displayName, setDisplayName] = useState('บัญชีของฉัน')
-  
-  // ✅ เพิ่ม State สำหรับ Search
+  const [userRole, setUserRole] = useState(null) // ✅ เพิ่ม State เก็บ Role
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
-    const fetchProfileName = async () => {
+    const fetchProfile = async () => {
       if (user) {
         let initialName = user.user_metadata?.full_name || user.email?.split('@')[0]
+        
+        // ✅ แก้ Query: ดึง role มาด้วย
         const { data } = await supabase
           .from('user_profiles')
-          .select('full_name')
+          .select('full_name, role')
           .eq('user_id', user.id)
           .maybeSingle()
 
-        if (data?.full_name) {
-          setDisplayName(data.full_name)
+        if (data) {
+          if (data.full_name) setDisplayName(data.full_name)
+          if (data.role) setUserRole(data.role) // ✅ Set Role
         } else if (initialName) {
           setDisplayName(initialName)
         }
+      } else {
+        // Reset เมื่อไม่มี user
+        setDisplayName('บัญชีของฉัน')
+        setUserRole(null)
       }
     }
-    fetchProfileName()
-  }, [user])
+    fetchProfile()
+  }, [user, supabase])
 
   const handleLogout = async () => {
     const result = await Swal.fire({
@@ -59,14 +68,15 @@ export default function Navbar() {
       router.push('/login')
       router.refresh()
       setDisplayName('บัญชีของฉัน')
+      setUserRole(null)
     }
   }
 
-  // ✅ ฟังก์ชันค้นหา
   const handleSearch = (e) => {
     e.preventDefault()
     if (searchQuery.trim()) {
       router.push(`/storefront?q=${encodeURIComponent(searchQuery)}`)
+      setIsMenuOpen(false) // ปิดเมนูมือถือถ้าเปิดอยู่
     }
   }
 
@@ -91,7 +101,7 @@ export default function Navbar() {
             <span className="hidden sm:block">AI-Shop Electronics</span>
           </Link>
 
-          {/* Search Bar (Desktop) - ✅ แก้ไขให้ใช้งานได้ */}
+          {/* Search Bar (Desktop) */}
           <div className="hidden md:flex flex-1 max-w-2xl mx-4">
             <form onSubmit={handleSearch} className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
               <div className="flex items-center px-3 bg-gray-100 border-r text-gray-500 text-sm whitespace-nowrap">
@@ -116,6 +126,26 @@ export default function Navbar() {
               <div className="h-8 w-24 bg-white/20 rounded animate-pulse"></div>
             ) : user ? (
               <>
+                {/* ✅ ปุ่ม Admin Dashboard (แสดงเฉพาะ admin) */}
+                {userRole === 'admin' && (
+                  <Link 
+                    href="/admin/dashboard" 
+                    className="hidden md:flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-md text-sm font-bold transition-colors border border-gray-600 shadow-sm"
+                  >
+                    <LayoutDashboard size={16} /> Admin
+                  </Link>
+                )}
+
+                {/* ✅ ปุ่ม Seller Center (แสดงเฉพาะ seller) */}
+                {userRole === 'seller' && (
+                  <Link 
+                    href="/seller/dashboard" 
+                    className="hidden md:flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-bold transition-colors border border-white/20"
+                  >
+                    <Store size={16} /> ร้านค้า
+                  </Link>
+                )}
+
                 <Link href="/profile" className="hidden md:flex flex-col items-start leading-tight hover:bg-agri-hover px-3 py-1.5 rounded-lg transition-colors">
                   <span className="text-[10px] text-gray-200 font-light">สวัสดี,</span>
                   <span className="text-sm font-bold flex items-center gap-1 max-w-[150px] truncate">
@@ -152,7 +182,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile Search - ✅ แก้ไขให้ใช้งานได้ */}
+        {/* Mobile Search */}
         <div className="mt-3 md:hidden">
           <form onSubmit={handleSearch} className="flex w-full bg-white rounded-lg overflow-hidden shadow-sm">
             <input 
@@ -169,6 +199,7 @@ export default function Navbar() {
         </div>
       </div>
 
+      {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden bg-agri-hover text-white border-t border-white/10 animate-fade-in">
           <div className="container mx-auto py-2">
@@ -176,12 +207,37 @@ export default function Navbar() {
               <div className="px-4 py-3 border-b border-white/10 mb-2">
                 <p className="text-xs text-gray-300">ยินดีต้อนรับ</p>
                 <p className="font-bold text-lg">{displayName}</p>
+                {/* แสดงสถานะในเมนูมือถือ */}
+                {userRole && <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full uppercase">{userRole}</span>}
               </div>
             )}
+            
             <Link href="/" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">หน้าแรก</Link>
             <Link href="/storefront" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">สินค้าทั้งหมด</Link>
+            
             {user && (
               <>
+                {/* ✅ เมนูพิเศษในมือถือ */}
+                {userRole === 'admin' && (
+                  <Link 
+                    href="/admin/dashboard" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="block px-4 py-3 hover:bg-white/10 text-yellow-300 font-bold"
+                  >
+                    👑 แดชบอร์ดแอดมิน
+                  </Link>
+                )}
+                
+                {userRole === 'seller' && (
+                  <Link 
+                    href="/seller/dashboard" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="block px-4 py-3 hover:bg-white/10 text-green-200 font-bold"
+                  >
+                    🏪 จัดการร้านค้า
+                  </Link>
+                )}
+
                 <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">ข้อมูลส่วนตัว</Link>
                 <Link href="/profile/orders" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 hover:bg-white/10">ประวัติคำสั่งซื้อ</Link>
                 <button onClick={() => { setIsMenuOpen(false); handleLogout(); }} className="w-full text-left px-4 py-3 hover:bg-red-600/50 text-red-200 mt-2 border-t border-white/10">
