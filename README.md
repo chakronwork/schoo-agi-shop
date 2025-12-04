@@ -111,6 +111,8 @@ Agri-Tech Marketplace คือแพลตฟอร์ม E-Commerce ที่�
 ### Additional Tools
 - **Data Validation**: Zod
 - **Image Optimization**: Next.js Image Component
+- **AI Bot : Gmmini Api Key**
+- **IDE : VS Code**
 
 ## ✨ ฟีเจอร์หลัก
 
