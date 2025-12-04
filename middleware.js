@@ -30,13 +30,12 @@ export async function middleware(request) {
     }
   )
 
-  // 1. เช็คว่า User Login หรือยัง
+  // 1. เช็ค User
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 2. กฎการป้องกัน (Protection Rules)
   const url = request.nextUrl.clone()
-  
-  // กรณี: ยังไม่ได้ Login แต่พยายามเข้าหน้า Admin, Seller หรือ Profile
+
+  // 2. ถ้ายังไม่ล็อกอิน แต่พยายามเข้าหน้าหวงห้าม (Admin, Seller, Profile) -> ดีดไป Login
   if (!user && (
     url.pathname.startsWith('/admin') || 
     url.pathname.startsWith('/seller') ||
@@ -45,28 +44,16 @@ export async function middleware(request) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // กรณี: Login แล้ว แต่พยายามเข้าหน้า Login/Register อีก
+  // 3. ถ้าล็อกอินแล้ว แต่พยายามเข้าหน้า Login/Register -> ดีดไปหน้าแรก
   if (user && (url.pathname === '/login' || url.pathname === '/register')) {
-    // ให้เด้งไปหน้าแรก หรือ Dashboard ของเขาก็ได้
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // 3. (Optional & Recommended) เช็ค Role แบบเข้มข้น
-  // ตรงนี้อาจต้องยิง DB เพิ่มเพื่อดึง Role มาเช็คว่า admin จริงไหม
-  // แต่เพื่อประสิทธิภาพ ส่วนใหญ่มักจะเช็คที่ Page Layout หรือปล่อยให้ RLS กันที่ Database อีกที
-  
   return response
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
