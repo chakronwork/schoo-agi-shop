@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function POST(request) {
-  const cookieStore = await cookies() // ✅ เพิ่ม await ตาม Next.js 15+
+  const cookieStore = await cookies()
   
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -30,7 +30,7 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    // 2. เช็คว่าเป็นเจ้าของร้านจริงไหม (และ Status ร้านต้อง Approved)
+    // 2. เช็คว่าเป็นเจ้าของร้านจริงไหม
     const { data: store, error: storeError } = await supabase
       .from('stores')
       .select('id, status')
@@ -50,7 +50,11 @@ export async function POST(request) {
     const categoryId = parseInt(formData.get('category_id'))
     const imageFile = formData.get('image')
 
-    // 4. อัปโหลดรูป
+    if (!imageFile) {
+        return NextResponse.json({ message: 'Image is required' }, { status: 400 })
+    }
+
+    // 4. อัปโหลดรูปภาพ
     const fileExt = imageFile.name.split('.').pop()
     const fileName = `${store.id}/${Date.now()}.${fileExt}`
     
@@ -60,12 +64,12 @@ export async function POST(request) {
 
     if (uploadError) throw new Error('Upload failed: ' + uploadError.message)
 
-    // 5. เอา URL รูป
+    // 5. เอา URL รูป (ใช้ getPublicUrl เสมอ)
     const { data: { publicUrl } } = supabase.storage
       .from('product-images')
       .getPublicUrl(fileName)
 
-    // 6. บันทึกลงตาราง Products
+    // 6. บันทึกลงตาราง Products และรับ ID กลับมา
     const { data: newProduct, error: insertError } = await supabase
       .from('products')
       .insert({
@@ -77,37 +81,27 @@ export async function POST(request) {
         store_id: store.id,
         status: 'available'
       })
-      .select('id') // คืนค่ากลับมาหน่อยจะได้ชัวร์
+      .select('id')
       .single()
 
-    // 7. บันทึกลงตาราง product_images (เพื่อให้แสดงผลได้หลายรูปในอนาคต)
-    // *หมายเหตุ: ต้อง query หา product_id ล่าสุดก่อน หรือใช้ค่าที่ return จากข้อ 6
-    // แต่เพื่อให้ง่าย ใช้ trigger หรือ logic ในอนาคตมาจัดการ ตอนนี้เอาแค่รูปหลักก่อน
-    
-    // *แก้ไข: จริงๆ เราควร insert ลง product_images ด้วย เพื่อให้ ProductCard ดึงรูปได้ถูกต้อง*
-    // แต่เนื่องจากเรายังไม่มี product_id ในมือ (ถ้าไม่ได้ใช้ .select().single()) 
-    // งั้นเรามาแก้แบบง่ายๆ คือให้ products มี logic เชื่อมโยงรูป หรือใส่รูปแรก
-    
-    // ** เพื่อความชัวร์ ผมขอแก้ข้อ 6 ให้รับค่า ID มาใช้นะครับ **
-    // (อิงตามโค้ดข้างบน ผมใส่ .select() ไว้แล้ว) 
-    // แต่ถ้า supabase insert error ให้เช็คว่ามี trigger สร้างรูปไหม
-    
     if (insertError) throw insertError
 
-    // ถ้าต้องการบันทึก path รูปลงตาราง product_images ด้วย (ต้องทำ ไม่งั้นรูปไม่ขึ้น)
-    // ต้องได้ Product ID มาก่อน ซึ่งถ้า insert สำเร็จควรจะได้มา
-    // *ข้ามส่วนนี้ไปก่อน ถ้า ProductCard ดึงจาก product_images* // *เราต้อง Insert ลง product_images ด้วยครับ!*
-    
-    // 🔄 แก้ไข: ต้องดึง Product ล่าสุดที่เพิ่งสร้าง
-    const { error: imageInsertError } = await supabase.from('product_images').insert({
-      product_id: newProduct.id,
-      image_url: publicUrl,
-      is_primary: true
-    })
+    // 7. ✅ สำคัญ: บันทึกลงตาราง product_images ทันที
+    const { error: imageInsertError } = await supabase
+      .from('product_images')
+      .insert({
+        product_id: newProduct.id,
+        image_url: publicUrl,
+        is_primary: true
+      })
 
-    if (imageInsertError) throw imageInsertError
+    if (imageInsertError) {
+        // (Optional) ถ้าใส่รูปไม่เข้า อาจจะลบ product ทิ้งเพื่อไม่ให้ data ขยะค้าง
+        // await supabase.from('products').delete().eq('id', newProduct.id)
+        throw imageInsertError
+    }
 
-    return NextResponse.json({ message: 'Success' }, { status: 201 })
+    return NextResponse.json({ message: 'Success', productId: newProduct.id }, { status: 201 })
 
   } catch (error) {
     console.error('API Error:', error)
