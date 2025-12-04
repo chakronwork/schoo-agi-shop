@@ -1,3 +1,4 @@
+// src/app/auth/callback/route.js
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -5,11 +6,10 @@ import { cookies } from 'next/headers'
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
+  // const next = searchParams.get('next') ?? '/' // ❌ ไม่ใช้ค่า next เดิมแล้ว เพราะเราจะกำหนดเองตาม Role
 
   if (code) {
-    // ✅ แก้ไขตรงนี้: เติม await ข้างหน้า cookies()
-    const cookieStore = await cookies() 
+    const cookieStore = await cookies()
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,7 +19,6 @@ export async function GET(request) {
           getAll() {
             return cookieStore.getAll()
           },
-          // แก้ไข method ให้รองรับ Next.js 15+
           setAll(cookiesToSet) {
             try {
               cookiesToSet.forEach(({ name, value, options }) =>
@@ -35,23 +34,42 @@ export async function GET(request) {
       }
     )
     
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    // 1. แลกเปลี่ยน Code เป็น Session
+    const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code)
     
-    if (!error) {
+    if (!error && session) {
+      // 2. ✅ เช็ค Role จากตาราง user_profiles ทันที
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .maybeSingle() // ใช้ maybeSingle เพื่อกัน Error กรณี User ใหม่ยังไม่มี Profile
+
+      const role = profile?.role || 'buyer' // ถ้าหาไม่เจอ ให้ถือว่าเป็น buyer (ลูกค้าทั่วไป)
+
+      // 3. ✅ กำหนดเส้นทาง (Target URL) ตาม Role
+      let targetUrl = '/storefront' // Default
+      
+      if (role === 'admin') {
+        targetUrl = '/admin/dashboard'
+      } else if (role === 'seller') {
+        targetUrl = '/seller/dashboard'
+      }
+
+      // 4. Redirect ไปยังหน้าที่ถูกต้อง (รองรับทั้ง Local และ Production)
       const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
       const isLocalEnv = process.env.NODE_ENV === 'development'
       
       if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        return NextResponse.redirect(`${origin}${next}`)
+        return NextResponse.redirect(`${origin}${targetUrl}`)
       } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
+        return NextResponse.redirect(`https://${forwardedHost}${targetUrl}`)
       } else {
-        return NextResponse.redirect(`${origin}${next}`)
+        return NextResponse.redirect(`${origin}${targetUrl}`)
       }
     }
   }
 
-  // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/login?error=Could not authenticate user`)
+  // กรณี Error ให้ส่งกลับไปหน้า Login พร้อม Error Code
+  return NextResponse.redirect(`${origin}/login?error=auth_failed`)
 }

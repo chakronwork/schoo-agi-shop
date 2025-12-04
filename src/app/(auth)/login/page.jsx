@@ -20,7 +20,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: { user }, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -34,14 +34,28 @@ export default function LoginPage() {
       })
       setLoading(false)
     } else {
+      // ✅ เพิ่ม Logic เช็ค Role
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single()
+      
+      const role = profile?.role || 'buyer'
+      
       Swal.fire({
         icon: 'success',
         title: 'ยินดีต้อนรับกลับ!',
         timer: 1500,
         showConfirmButton: false
       })
+
+      // ✅ Redirect ไปตาม Role
       setTimeout(() => {
-        router.push('/')
+        if (role === 'admin') router.push('/admin/dashboard')
+        else if (role === 'seller') router.push('/seller/dashboard')
+        else router.push('/storefront') // หรือหน้าแรก
+        
         router.refresh()
       }, 1000)
     }
