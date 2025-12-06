@@ -64,13 +64,15 @@ export default function OrderDetailPage({ params }) {
         
         {/* Success Header */}
         <div className="bg-agri-primary text-white rounded-t-3xl p-8 text-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full bg-[url('/pattern.svg')] opacity-10"></div>
+          {/* ✅ ลบ url('/pattern.svg') ออกชั่วคราวกัน 404 หรือจะใส่กลับเมื่อสร้างไฟล์แล้วก็ได้ */}
+          <div className="absolute top-0 left-0 w-full h-full opacity-10"></div>
           <div className="relative z-10">
             <div className="w-16 h-16 bg-white text-agri-primary rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-bounce-in">
               <CheckCircle size={32} />
             </div>
             <h1 className="text-2xl font-bold mb-2">ขอบคุณสำหรับการสั่งซื้อ!</h1>
-            <p className="text-green-100">หมายเลขคำสั่งซื้อ: #{order.id.slice(0, 8).toUpperCase()}</p>
+            {/* ✅ แก้ไขจุดที่ Error: เติม .toString() */}
+            <p className="text-green-100">หมายเลขคำสั่งซื้อ: #{order.id.toString().slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
 

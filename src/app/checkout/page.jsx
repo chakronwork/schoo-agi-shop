@@ -24,15 +24,14 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('qr_code')
   const [loading, setLoading] = useState(false)
 
-  // ดึงข้อมูล User มาใส่ในฟอร์มอัตโนมัติ (ถ้ามี)
   useEffect(() => {
     if (!authLoading && !user) router.push('/login')
     if (cartItems.length === 0 && !authLoading) router.push('/cart')
     
-    // ดึงที่อยู่จาก Profile มาใส่ให้เลย (อำนวยความสะดวกแบบแอปจริง)
     const fetchProfile = async () => {
         if(user) {
-            const { data } = await supabase.from('user_profiles').select('*').eq('user_id', user.id).single()
+            // ✅ ใช้ maybeSingle แทน single เพื่อแก้ปัญหา Error 406
+            const { data } = await supabase.from('user_profiles').select('*').eq('user_id', user.id).maybeSingle()
             if(data) {
                 setShippingAddress(data.address || '')
                 setPhone(data.phone_number || '')
@@ -51,18 +50,12 @@ export default function CheckoutPage() {
     setLoading(true)
 
     try {
-      // --- MOCK PAYMENT PROCESS (ยัดไส้ตรงนี้) ---
+      // --- MOCK PAYMENT PROCESS (ยัดไส้) ---
       // ทำท่าเหมือนกำลังติดต่อธนาคาร (หน่วงเวลา 2 วินาที)
       await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // --- DATABASE UPDATE (ของจริง) ---
-      // บันทึกลง Database ว่าสั่งซื้อแล้ว (สถานะเป็น pending หรือ confirmed ตาม logic)
-      // ถ้าเลือก QR/บัตร เราจะติ๊งต่างว่า "จ่ายแล้ว" (confirmed) ไปเลยเพื่อให้ Flow จบง่าย
-      // ถ้าเลือก COD (เก็บเงินปลายทาง) สถานะจะเป็น pending
-      const status = paymentMethod === 'cod' ? 'pending' : 'confirmed'
-
-      // เรียก RPC หรือ Insert ลงตาราง orders
-      // หมายเหตุ: ตรงนี้พี่ใช้ Logic เดิมจากไฟล์เก่า แต่ตัดส่วน Omise ออก
+      // --- DATABASE UPDATE ---
+      // เรียก RPC เพื่อบันทึกข้อมูล (ใช้ SQL Function ที่เราแก้ไป)
       const { data: orderId, error } = await supabase.rpc('place_order', {
         p_user_id: user.id,
         p_shipping_address: shippingAddress,
@@ -72,7 +65,7 @@ export default function CheckoutPage() {
 
       if (error) throw error
 
-      // ถ้าจ่ายแบบจำลองสำเร็จ ให้ไปอัปเดตสถานะเป็น confirmed ทันที (เฉพาะที่ไม่ใช่ COD)
+      // ถ้าจ่ายแบบจำลองสำเร็จ (ไม่ใช่ COD) ให้อัปเดตสถานะเป็น confirmed ทันที
       if (paymentMethod !== 'cod') {
           await supabase.from('orders').update({ status: 'confirmed' }).eq('id', orderId)
       }
@@ -104,7 +97,7 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-gray-50 py-8 px-4 md:px-8">
       <div className="container mx-auto max-w-6xl">
         
-        {/* Header แบบแอป Shopee/Lazada */}
+        {/* Header */}
         <div className="flex items-center gap-4 mb-6 border-b pb-4 bg-white p-4 rounded-t-xl shadow-sm">
             <div className="text-agri-primary font-bold text-xl flex items-center gap-2">
                 <ShieldCheck size={24}/> Checkout
@@ -147,7 +140,7 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* 2. รายการสินค้า (ทวนรายการ) */}
+            {/* 2. รายการสินค้า */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                 <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2 text-agri-primary">
                     <Truck size={20} /> รายการสินค้า
@@ -222,7 +215,6 @@ export default function CheckoutPage() {
                   <span>ค่าจัดส่ง</span>
                   <span className="text-green-600 font-medium">ฟรี</span>
                 </div>
-                {/* ตรงนี้ไม่ต้องโชว์ค่าธรรมเนียมตามที่บรีฟมา */}
                 <div className="border-t border-gray-200 my-2 pt-4"></div>
                 <div className="flex justify-between items-end">
                   <span className="font-bold text-gray-800 text-base">ยอดรวมทั้งสิ้น</span>
