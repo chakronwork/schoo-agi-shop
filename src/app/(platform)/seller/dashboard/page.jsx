@@ -7,9 +7,14 @@ import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Package, Plus, LogOut, Trash2, Edit, CheckCircle, XCircle, Truck, FileText } from 'lucide-react'
+import { 
+  Package, Plus, LogOut, Trash2, Edit, CheckCircle, XCircle, 
+  Truck, FileText, Wallet, CreditCard, ArrowRight, Banknote 
+} from 'lucide-react'
 import Swal from 'sweetalert2'
+import withReactContent from 'sweetalert2-react-content'
 
+const MySwal = withReactContent(Swal)
 const formatDate = (dateString) => new Date(dateString).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 const formatPrice = (price) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(price)
 
@@ -23,12 +28,25 @@ export default function SellerDashboard() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('products')
-  const [stats, setStats] = useState({ totalSales: 0, activeProducts: 0, pendingOrders: 0 })
+  
+  // ✅ เพิ่ม state สำหรับยอดเงินที่ถอนได้
+  const [stats, setStats] = useState({ 
+    totalSales: 0, 
+    netBalance: 0, // ยอดถอนได้จริง (หลังหัก Fee)
+    activeProducts: 0, 
+    pendingOrders: 0 
+  })
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login')
     if (user) fetchStoreAndData()
   }, [user, authLoading])
+
+  const calculateFee = (price) => {
+    if (price < 1000) return price * 0.03
+    if (price >= 4000) return price * 0.05
+    return price * 0.03
+  }
 
   const fetchStoreAndData = async () => {
     try {
@@ -52,16 +70,33 @@ export default function SellerDashboard() {
           productImage: item.products.image_url?.[0]?.image_url || '/placeholder.svg',
           quantity: item.quantity,
           totalPrice: item.quantity * item.price_at_purchase,
-          pricePerUnit: item.price_at_purchase, // เก็บราคาต่อหน่วยไว้คำนวณ
+          pricePerUnit: item.price_at_purchase,
           status: item.orders.status,
           customer: item.orders.user_profiles?.full_name || 'ลูกค้าทั่วไป',
           date: item.orders.created_at,
           address: item.orders.shipping_address
         })) || []
 
+        // ✅ คำนวณยอดเงินสุทธิ (Net Income)
+        let totalSales = 0
+        let totalNetIncome = 0
+
+        formattedOrders.forEach(order => {
+            // นับยอดเฉพาะออเดอร์ที่ไม่ยกเลิก
+            if (order.status !== 'cancelled') {
+                const feePerUnit = calculateFee(order.pricePerUnit)
+                const totalFee = feePerUnit * order.quantity
+                const net = order.totalPrice - totalFee
+                
+                totalSales += order.totalPrice
+                totalNetIncome += net
+            }
+        })
+
         setOrders(formattedOrders)
         setStats({
-          totalSales: formattedOrders.reduce((sum, o) => sum + o.totalPrice, 0),
+          totalSales: totalSales,
+          netBalance: totalNetIncome, // เก็บยอดสุทธิ
           activeProducts: productsData?.filter(p => p.status === 'available').length || 0,
           pendingOrders: formattedOrders.filter(o => o.status === 'pending').length
         })
@@ -73,21 +108,53 @@ export default function SellerDashboard() {
     }
   }
 
-  // ✅ ฟังก์ชันคำนวณค่าธรรมเนียมตามกฎที่ให้มา
-  // < 1000 : หัก 3%
-  // >= 4000 : หัก 5%
-  // 1000 - 3999 : หัก 3% (ใช้ฐานเดียวกับ < 1000 ไปก่อน เพื่อความแฟร์กับร้านค้า หรือจะปรับเป็น 4% ก็ได้)
-  const calculateFee = (price) => {
-    if (price < 1000) return price * 0.03
-    if (price >= 4000) return price * 0.05
-    return price * 0.03 // ช่วงกลาง 1000-3999 คิด 3%
-  }
-
   const updateOrderStatus = async (orderId, newStatus) => {
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId)
     if (!error) {
       setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: newStatus } : o))
+      // รีเฟรชยอดเงินใหม่หลังเปลี่ยนสถานะ (เช่นถ้ายกเลิก ยอดต้องลด)
+      fetchStoreAndData() 
       Swal.fire({ icon: 'success', title: 'อัปเดตสถานะแล้ว', timer: 1500, showConfirmButton: false })
+    }
+  }
+
+  // ✅ ฟังก์ชันถอนเงิน (Mockup)
+  const handleWithdraw = async () => {
+    if (stats.netBalance <= 0) {
+        return Swal.fire({ icon: 'error', title: 'ยอดเงินไม่เพียงพอ', text: 'คุณยังไม่มีรายได้ที่สามารถถอนได้' })
+    }
+
+    const result = await MySwal.fire({
+        title: 'ยืนยันการถอนเงิน',
+        html: `
+            <div class="text-left text-sm space-y-2 mb-4">
+                <div class="flex justify-between"><span>ยอดเงินคงเหลือ:</span> <b>${formatPrice(stats.netBalance)}</b></div>
+                <div class="flex justify-between text-gray-500"><span>ค่าธรรมเนียมการโอน:</span> <span>ฟรี</span></div>
+                <hr/>
+                <div class="flex justify-between text-lg text-agri-primary font-bold"><span>ยอดโอนเข้าบัญชี:</span> <span>${formatPrice(stats.netBalance)}</span></div>
+            </div>
+            <p class="text-xs text-gray-400">เงินจะเข้าบัญชีภายใน 24 ชม.</p>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยันการโอน',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#2E7D32'
+    })
+
+    if (result.isConfirmed) {
+        // จำลองการโหลด
+        Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading() })
+        await new Promise(r => setTimeout(r, 2000))
+
+        setStats(prev => ({ ...prev, netBalance: 0 })) // เคลียร์ยอดเงินเป็น 0
+
+        await Swal.fire({
+            icon: 'success',
+            title: 'ถอนเงินสำเร็จ!',
+            text: 'ระบบได้โอนเงินเข้าบัญชีของคุณเรียบร้อยแล้ว (จำลอง)',
+            confirmButtonColor: '#2E7D32'
+        })
     }
   }
 
@@ -120,10 +187,45 @@ export default function SellerDashboard() {
       </aside>
 
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><p className="text-sm text-gray-500">ยอดขายรวม</p><p className="text-2xl font-bold text-agri-primary">{formatPrice(stats.totalSales)}</p></div>
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><p className="text-sm text-gray-500">รอจัดส่ง</p><p className="text-2xl font-bold text-orange-500">{stats.pendingOrders} รายการ</p></div>
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100"><p className="text-sm text-gray-500">สินค้า Active</p><p className="text-2xl font-bold text-green-600">{stats.activeProducts}</p></div>
+        
+        {/* ✅ Dashboard Stats Section */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            {/* Wallet Card */}
+            <div className="md:col-span-2 bg-gradient-to-r from-agri-primary to-green-600 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden group">
+                <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
+                    <Wallet size={120} />
+                </div>
+                <div className="relative z-10">
+                    <p className="text-green-100 text-sm mb-1 flex items-center gap-2"><CreditCard size={16}/> ยอดเงินที่ถอนได้</p>
+                    <h2 className="text-3xl font-extrabold mb-4">{formatPrice(stats.netBalance)}</h2>
+                    <button 
+                        onClick={handleWithdraw}
+                        className="bg-white text-agri-primary px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-50 transition-colors flex items-center gap-2 shadow-sm active:scale-95"
+                    >
+                        ถอนเงินเข้าบัญชี <ArrowRight size={16} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Other Stats */}
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+                <p className="text-sm text-gray-500 mb-1">ยอดขายรวม (Gross)</p>
+                <p className="text-2xl font-bold text-gray-800">{formatPrice(stats.totalSales)}</p>
+                <p className="text-xs text-green-500 mt-1 flex items-center gap-1"><Banknote size={12}/> ก่อนหักค่าธรรมเนียม</p>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+                <p className="text-sm text-gray-500 mb-1">สถานะคำสั่งซื้อ</p>
+                <div className="flex justify-between items-end">
+                    <div>
+                        <p className="text-2xl font-bold text-orange-500">{stats.pendingOrders}</p>
+                        <p className="text-xs text-gray-400">รอจัดส่ง</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-2xl font-bold text-green-600">{stats.activeProducts}</p>
+                        <p className="text-xs text-gray-400">สินค้าขายอยู่</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {activeTab === 'products' && (
@@ -161,7 +263,6 @@ export default function SellerDashboard() {
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">สินค้า</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">ลูกค้า</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">ยอดขาย</th>
-                      {/* ✅ เพิ่มคอลัมน์ ค่าธรรมเนียม & รายได้สุทธิ */}
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">รายได้สุทธิ (หลังหัก Fee)</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">สถานะ</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Action</th>
@@ -169,7 +270,6 @@ export default function SellerDashboard() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
                     {orders.map((order) => {
-                      // คำนวณ Fee และ Net
                       const feePerUnit = calculateFee(order.pricePerUnit)
                       const totalFee = feePerUnit * order.quantity
                       const netIncome = order.totalPrice - totalFee
@@ -185,13 +285,10 @@ export default function SellerDashboard() {
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-700"><div className="font-bold">{order.customer}</div><div className="text-xs text-gray-500 truncate max-w-[150px]">{order.address}</div></td>
                           <td className="px-6 py-4 text-sm font-bold text-gray-800">{formatPrice(order.totalPrice)}</td>
-                          
-                          {/* ✅ แสดงรายได้สุทธิ */}
                           <td className="px-6 py-4">
                             <div className="text-sm font-bold text-green-600">{formatPrice(netIncome)}</div>
                             <div className="text-[10px] text-gray-400">หัก {feePercent} ({formatPrice(totalFee)})</div>
                           </td>
-
                           <td className="px-6 py-4"><span className={`px-2.5 py-1 text-xs font-bold rounded-full capitalize ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : order.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : order.status === 'shipped' ? 'bg-purple-100 text-purple-700' : order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{order.status}</span></td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">

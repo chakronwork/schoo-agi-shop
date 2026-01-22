@@ -9,7 +9,9 @@ import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { CreditCard, QrCode, Truck, MapPin, Loader2, ShieldCheck, Wallet } from 'lucide-react'
 import Swal from 'sweetalert2'
+import withReactContent from 'sweetalert2-react-content'
 
+const MySwal = withReactContent(Swal)
 const formatPrice = (price) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(price)
 
 export default function CheckoutPage() {
@@ -30,7 +32,6 @@ export default function CheckoutPage() {
     
     const fetchProfile = async () => {
         if(user) {
-            // ✅ ใช้ maybeSingle แทน single เพื่อแก้ปัญหา Error 406
             const { data } = await supabase.from('user_profiles').select('*').eq('user_id', user.id).maybeSingle()
             if(data) {
                 setShippingAddress(data.address || '')
@@ -50,12 +51,45 @@ export default function CheckoutPage() {
     setLoading(true)
 
     try {
-      // --- MOCK PAYMENT PROCESS (ยัดไส้) ---
-      // ทำท่าเหมือนกำลังติดต่อธนาคาร (หน่วงเวลา 2 วินาที)
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // 1. ถ้าเลือกจ่าย QR Code
+      if (paymentMethod === 'qr_code') {
+        // เรียก API ปลอมที่เราทำไว้
+        const res = await fetch('/api/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: totalAmount, method: 'promptpay' })
+        })
+        const data = await res.json()
 
-      // --- DATABASE UPDATE ---
-      // เรียก RPC เพื่อบันทึกข้อมูล (ใช้ SQL Function ที่เราแก้ไป)
+        // ดึงรูป QR จากข้อมูลหลอกๆ ที่ส่งกลับมา
+        const qrImage = data.charge.source.scannable_code.image.download_uri
+
+        // เด้ง Popup QR Code
+        const result = await MySwal.fire({
+          title: 'สแกนจ่ายเงิน (Mockup)',
+          text: 'นี่คือการจำลอง ระบบจะถือว่าจ่ายสำเร็จทันทีที่กดปุ่ม',
+          imageUrl: qrImage,
+          imageWidth: 200,
+          imageHeight: 200,
+          imageAlt: 'QR Code',
+          showCancelButton: true,
+          confirmButtonText: 'จำลองการจ่ายเงินสำเร็จ',
+          cancelButtonText: 'ยกเลิก',
+          confirmButtonColor: '#2E7D32',
+          allowOutsideClick: false
+        })
+
+        if (!result.isConfirmed) {
+          setLoading(false)
+          return // ถ้ายกเลิกก็หยุดตรงนี้
+        }
+      } 
+      else if (paymentMethod !== 'cod') {
+         // จำลองโหลดนิดหน่อยสำหรับบัตรเครดิต
+         await new Promise(resolve => setTimeout(resolve, 1500))
+      }
+
+      // 2. บันทึกลง Database (เหมือนเดิม)
       const { data: orderId, error } = await supabase.rpc('place_order', {
         p_user_id: user.id,
         p_shipping_address: shippingAddress,
@@ -65,20 +99,19 @@ export default function CheckoutPage() {
 
       if (error) throw error
 
-      // ถ้าจ่ายแบบจำลองสำเร็จ (ไม่ใช่ COD) ให้อัปเดตสถานะเป็น confirmed ทันที
+      // ถ้าไม่ใช่ COD (คือจ่าย QR หรือบัตร) ให้อัปเดตสถานะเป็น confirmed เลย
       if (paymentMethod !== 'cod') {
           await supabase.from('orders').update({ status: 'confirmed' }).eq('id', orderId)
       }
 
-      await fetchCart() // เคลียร์ตะกร้า
+      await fetchCart() // ล้างตะกร้า
       
       Swal.fire({
         icon: 'success',
         title: 'สั่งซื้อสำเร็จ!',
         text: 'ระบบได้รับคำสั่งซื้อเรียบร้อยแล้ว',
         timer: 2000,
-        showConfirmButton: false,
-        confirmButtonColor: '#2E7D32'
+        showConfirmButton: false
       }).then(() => {
         router.push(`/orders/${orderId}`)
       })
@@ -103,7 +136,7 @@ export default function CheckoutPage() {
                 <ShieldCheck size={24}/> Checkout
             </div>
             <div className="h-6 w-[1px] bg-gray-300"></div>
-            <div className="text-gray-500 text-sm">ทำการสั่งซื้อ (Simulation Mode)</div>
+            <div className="text-gray-500 text-sm">ทำการสั่งซื้อ</div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -161,7 +194,7 @@ export default function CheckoutPage() {
                 </div>
             </div>
 
-            {/* 3. วิธีการชำระเงิน (Mock Selection) */}
+            {/* 3. วิธีการชำระเงิน */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
               <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2 text-agri-primary">
                 <Wallet size={20} /> เลือกวิธีการชำระเงิน
@@ -174,7 +207,7 @@ export default function CheckoutPage() {
                     <div className="bg-white p-2 rounded border border-gray-200"><QrCode size={24} className="text-gray-700"/></div>
                     <div className="flex-1">
                         <p className="font-bold text-sm text-gray-800">QR PromptPay</p>
-                        <p className="text-xs text-gray-500">สแกนจ่ายผ่านแอปธนาคาร (ฟรีค่าธรรมเนียม)</p>
+                        <p className="text-xs text-gray-500">จำลองการสแกนจ่าย (ไม่ต้องโอนจริง)</p>
                     </div>
                 </label>
 
@@ -184,7 +217,7 @@ export default function CheckoutPage() {
                     <div className="bg-white p-2 rounded border border-gray-200"><CreditCard size={24} className="text-blue-600"/></div>
                     <div className="flex-1">
                         <p className="font-bold text-sm text-gray-800">บัตรเครดิต / เดบิต</p>
-                        <p className="text-xs text-gray-500">รองรับ Visa, MasterCard, JCB</p>
+                        <p className="text-xs text-gray-500">จำลองการตัดบัตร</p>
                     </div>
                 </label>
 
@@ -228,12 +261,12 @@ export default function CheckoutPage() {
                 disabled={loading}
                 className="w-full py-4 bg-agri-primary text-white rounded-xl font-bold hover:bg-agri-hover transition-all shadow-lg shadow-agri-primary/30 flex items-center justify-center gap-2 transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {loading ? <Loader2 className="animate-spin" /> : 'สั่งสินค้า'}
+                {loading ? <Loader2 className="animate-spin" /> : 'สั่งสินค้า (Mockup)'}
               </button>
 
               <div className="mt-4 text-center">
                 <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
-                    <ShieldCheck size={12}/> ข้อมูลปลอดภัยด้วยการเข้ารหัส SSL
+                    <ShieldCheck size={12}/> ข้อมูลปลอดภัย (Mockup Mode)
                 </p>
               </div>
             </div>

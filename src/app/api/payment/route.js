@@ -1,29 +1,34 @@
 // src/app/api/payment/route.js
 import { NextResponse } from 'next/server'
-import Omise from 'omise'
-
-const omise = Omise({
-  publicKey: process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY,
-  secretKey: process.env.OMISE_SECRET_KEY,
-})
 
 export async function POST(request) {
   try {
-    const { amount, tokenId, sourceId } = await request.json()
+    const { amount, method } = await request.json()
 
-    // สร้าง Charge (รายการเรียกเก็บเงิน)
-    const charge = await omise.charges.create({
-      amount: amount * 100, // หน่วยเป็นสตางค์ (บาท * 100)
-      currency: 'thb',
-      card: tokenId, // กรณีตัดบัตร
-      source: sourceId, // กรณี QR Code / Internet Banking
-      return_uri: 'https://agri-tech-marketplace-azure.vercel.app/checkout/complete', // (Optional) กรณีต้อง Redirect
-    })
+    // จำลองว่ากำลังคิด (หน่วงเวลา 1 วินาที) ให้ดูเหมือนโหลดจริง
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
-    return NextResponse.json({ charge })
+    if (method === 'promptpay') {
+      // ส่งข้อมูลหลอกๆ กลับไป (Mock Data)
+      // พี่ใช้ api.qrserver.com สร้างรูป QR Code ให้เราฟรีๆ ตามยอดเงิน
+      return NextResponse.json({
+        charge: {
+          id: 'chrg_mock_123456', // รหัสออเดอร์มั่วๆ
+          source: {
+            scannable_code: {
+              image: {
+                // สร้างรูป QR Code ที่มีข้อความว่า "จ่ายเงิน xxx บาท"
+                download_uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=Payment-Mockup-${amount}-Baht`
+              }
+            }
+          }
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
 
   } catch (error) {
-    console.error('Omise Error:', error)
-    return NextResponse.json({ message: error.message }, { status: 500 })
+    return NextResponse.json({ message: 'Mock Error' }, { status: 500 })
   }
 }
