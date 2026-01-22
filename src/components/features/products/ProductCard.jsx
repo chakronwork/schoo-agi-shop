@@ -1,7 +1,7 @@
 // src/components/features/products/ProductCard.jsx
 import Image from 'next/image'
 import Link from 'next/link'
-import { ShoppingBag, Star } from 'lucide-react'
+import { ShoppingBag } from 'lucide-react' // ❌ เอา Star ออก
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('th-TH', {
@@ -14,7 +14,7 @@ export default function ProductCard({ product }) {
   const imageUrl = product.product_images?.[0]?.image_url || 'https://placehold.co/400x400/e2e8f0/1e293b?text=No+Image'
   const storeName = product.stores?.store_name || 'N/A'
   
-  const rating = product.avgRating || 0
+  // ❌ ลบตัวแปร rating ทิ้ง ไม่ได้ใช้แล้ว
 
   return (
      <Link href={`/product/${product.id}`} className="block group h-full">
@@ -26,7 +26,6 @@ export default function ProductCard({ product }) {
             src={imageUrl}
             alt={product.name}
             fill
-            // ✅ ใส่ unoptimized เพื่อแก้ปัญหา 400 Bad Request ทันที
             unoptimized 
             className="object-contain p-4 group-hover:scale-105 transition-transform duration-300"
           />
@@ -49,17 +48,7 @@ export default function ProductCard({ product }) {
             {product.name}
           </h3>
 
-          {/* Rating */}
-          <div className="flex items-center gap-1 mb-3">
-            {[...Array(5)].map((_, i) => (
-              <Star 
-                key={i} 
-                size={14} 
-                className={i < Math.floor(rating) ? "fill-agri-warning text-agri-warning" : "text-gray-300"} 
-              />
-            ))}
-            <span className="text-xs text-gray-400 ml-1">({product.reviewCount || 0})</span>
-          </div>
+          {/* ❌ เอาส่วนแสดง Rating (ดาว) ออกไปแล้ว ตามคำขอ */}
 
           <div className="mt-auto flex items-center justify-between">
             <div>
