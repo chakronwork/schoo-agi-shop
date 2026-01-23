@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import Link from 'next/link'
-import { CheckCircle, Clock, Truck, Package, ArrowLeft, Printer } from 'lucide-react'
+import { CheckCircle, Clock, Truck, Package, ArrowLeft } from 'lucide-react' // ❌ เอา Printer ออก
 
 const formatPrice = (price) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(price)
 const formatDate = (dateString) => new Date(dateString).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -64,14 +64,12 @@ export default function OrderDetailPage({ params }) {
         
         {/* Success Header */}
         <div className="bg-agri-primary text-white rounded-t-3xl p-8 text-center relative overflow-hidden">
-          {/* ✅ ลบ url('/pattern.svg') ออกชั่วคราวกัน 404 หรือจะใส่กลับเมื่อสร้างไฟล์แล้วก็ได้ */}
           <div className="absolute top-0 left-0 w-full h-full opacity-10"></div>
           <div className="relative z-10">
             <div className="w-16 h-16 bg-white text-agri-primary rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-bounce-in">
               <CheckCircle size={32} />
             </div>
             <h1 className="text-2xl font-bold mb-2">ขอบคุณสำหรับการสั่งซื้อ!</h1>
-            {/* ✅ แก้ไขจุดที่ Error: เติม .toString() */}
             <p className="text-green-100">หมายเลขคำสั่งซื้อ: #{order.id.toString().slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
@@ -154,18 +152,15 @@ export default function OrderDetailPage({ params }) {
             <span className="text-2xl font-extrabold text-agri-primary">{formatPrice(order.total_amount)}</span>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3">
-            <Link href="/storefront" className="flex-1 py-3 border border-gray-200 rounded-xl text-center text-gray-600 font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
-              <ArrowLeft size={18} /> กลับหน้าแรก
+          {/* Actions - เหลือปุ่มเดียว */}
+          <div>
+            <Link href="/storefront" className="w-full py-4 bg-agri-primary text-white rounded-xl text-center font-bold hover:bg-agri-hover transition-colors flex items-center justify-center gap-2 shadow-lg shadow-agri-primary/30">
+              <ArrowLeft size={18} /> ซื้อสินค้าต่อ
             </Link>
-            <button onClick={() => window.print()} className="flex-1 py-3 bg-agri-primary text-white rounded-xl text-center font-bold hover:bg-agri-hover transition-colors flex items-center justify-center gap-2 shadow-lg shadow-agri-primary/30">
-              <Printer size={18} /> พิมพ์ใบเสร็จ
-            </button>
           </div>
 
         </div>
       </div>
     </div>
   )
-}
+} 

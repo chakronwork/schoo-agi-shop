@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { 
   LayoutDashboard, Users, ShoppingBag, DollarSign, 
-  CheckCircle, XCircle, Search, MoreHorizontal, AlertTriangle
+  CheckCircle, AlertTriangle
 } from 'lucide-react'
 import Swal from 'sweetalert2'
 
@@ -34,18 +34,15 @@ export default function AdminDashboard() {
       setPendingSellers(sellers || [])
 
       // 2. ดึงสถิติ (Count Real Data)
-      // นับ User ทั้งหมด (user_profiles)
       const { count: userCount } = await supabase
         .from('user_profiles')
         .select('*', { count: 'exact', head: true })
 
-      // นับร้านค้าที่ Active
       const { count: shopCount } = await supabase
         .from('stores')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'approved')
 
-      // รวมยอดขายทั้งหมด (จาก orders)
       const { data: orders } = await supabase
         .from('orders')
         .select('total_amount')
@@ -76,7 +73,6 @@ export default function AdminDashboard() {
       cancelButtonText: 'ยกเลิก'
     }).then(async (result) => {
       if (result.isConfirmed) {
-        // อัปเดตสถานะใน DB จริง
         const { error } = await supabase
           .from('stores')
           .update({ status: 'approved' })
@@ -84,7 +80,6 @@ export default function AdminDashboard() {
 
         if (!error) {
           setPendingSellers(prev => prev.filter(s => s.id !== storeId))
-          // อัปเดตตัวเลขร้านค้า Active ทันที
           setStats(prev => ({ ...prev, activeShops: prev.activeShops + 1 }))
           Swal.fire('เรียบร้อย', 'อนุมัติร้านค้าสำเร็จ', 'success')
         } else {
@@ -97,7 +92,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-100 flex">
       
-      {/* Sidebar */}
+      {/* Sidebar - เหลือแค่เมนูภาพรวม */}
       <aside className="w-64 bg-gray-900 text-white hidden lg:block">
         <div className="p-6">
           <h2 className="text-2xl font-bold flex items-center gap-2 text-green-400">
@@ -108,13 +103,6 @@ export default function AdminDashboard() {
           <a href="#" className="flex items-center px-6 py-3 bg-gray-800 border-r-4 border-green-500 text-white">
             <LayoutDashboard size={20} className="mr-3" /> ภาพรวมระบบ
           </a>
-          {/* เมนูอื่นๆ ปิดไว้ก่อน */}
-          <div className="px-6 py-3 text-gray-600 text-sm uppercase mt-4 font-bold">Menu (Coming Soon)</div>
-          <div className="opacity-50">
-            <a href="#" className="flex items-center px-6 py-3 text-gray-400 cursor-not-allowed"><Users size={20} className="mr-3" /> จัดการผู้ใช้</a>
-            <a href="#" className="flex items-center px-6 py-3 text-gray-400 cursor-not-allowed"><ShoppingBag size={20} className="mr-3" /> สินค้า</a>
-            <a href="#" className="flex items-center px-6 py-3 text-gray-400 cursor-not-allowed"><DollarSign size={20} className="mr-3" /> ธุรกรรม</a>
-          </div>
         </nav>
       </aside>
 
@@ -130,7 +118,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards (Real Data) */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
             { title: 'ผู้ใช้งานทั้งหมด', value: stats.totalUsers, icon: <Users size={24}/>, color: 'bg-blue-500' },
@@ -152,7 +140,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Approve Table (Real Data) */}
+        {/* Approve Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-200 flex justify-between items-center">
             <h3 className="font-bold text-lg text-gray-800">คำขอเปิดร้านค้า (รออนุมัติ)</h3>
