@@ -12,12 +12,12 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'bubjkjlextyajptyzprq.supabase.co',
+        hostname: 'vlrknvenayvxgmblvjsd.supabase.co',
         pathname: '/storage/v1/object/public/**', // Allow Supabase public storage URLs
       },
       {
         protocol: 'https',
-        hostname: 'bubjkjlextyajptyzprq.storage.supabase.co',
+        hostname: 'vlrknvenayvxgmblvjsd.storage.supabase.co',
         pathname: '/**', // ✅ แก้เป็น /** เพื่ออนุญาตทุกรูปจาก Supabase
       },
     ],
