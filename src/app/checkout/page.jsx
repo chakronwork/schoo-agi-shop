@@ -89,15 +89,26 @@ export default function CheckoutPage() {
          await new Promise(resolve => setTimeout(resolve, 1500))
       }
 
-      // 2. บันทึกลง Database (เหมือนเดิม)
-      const { data: orderId, error } = await supabase.rpc('place_order', {
-        p_user_id: user.id,
-        p_shipping_address: shippingAddress,
-        p_phone: phone,
-        p_payment_method: paymentMethod
+      // 2. บันทึกลง Database ผ่าน API Endpoint ใหม่
+      const res = await fetch('/api/v1/orders', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          shipping_address: shippingAddress,
+          phone: phone,
+          payment_method: paymentMethod
+        })
       })
 
-      if (error) throw error
+      const result = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(result.error || 'เกิดข้อผิดพลาดในการสั่งซื้อ')
+      }
+
+      const orderId = result.data.id
 
       // ถ้าไม่ใช่ COD (คือจ่าย QR หรือบัตร) ให้อัปเดตสถานะเป็น confirmed เลย
       if (paymentMethod !== 'cod') {
